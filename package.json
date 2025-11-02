@@ -14,13 +14,14 @@
     "@modelcontextprotocol/sdk": "^1.18.2",
     "@workos-inc/node": "^7.70.0",
     "agents": "^0.2.4",
-    "hono": "^4.9.9",
+    "hono": "^4.10.4",
     "jose": "^6.1.0",
+    "pilpat-mcp-security": "^1.1.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250101.0",
     "typescript": "^5.9.2",
-    "wrangler": "^4.40.1"
+    "wrangler": "^4.45.3"
   }
 }

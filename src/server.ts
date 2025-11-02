@@ -6,6 +6,7 @@ import type { Env, State } from "./types";
 import type { Props } from "./props";
 import { checkBalance, consumeTokensWithRetry } from "./tokenConsumption";
 import { formatInsufficientTokensError } from "./tokenUtils";
+import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
 
 /**
  * OpenSky Flight Tracker MCP Server
@@ -108,6 +109,34 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                         ? JSON.stringify(aircraft, null, 2)
                         : `No aircraft found with ICAO24: ${icao24} (aircraft may not be currently flying)`;
 
+                    // ⭐ Step 4.5: Security Processing
+                    const sanitized = sanitizeOutput(result, {
+                        removeHtml: true,
+                        removeControlChars: true,
+                        normalizeWhitespace: true,
+                        maxLength: 5000
+                    });
+
+                    const { redacted, detectedPII } = redactPII(sanitized, {
+                        redactEmails: false,
+                        redactPhones: true,
+                        redactCreditCards: true,
+                        redactSSN: true,
+                        redactBankAccounts: true,
+                        redactPESEL: true,
+                        redactPolishIdCard: true,
+                        redactPolishPassport: true,
+                        redactPolishPhones: true,
+                        placeholder: '[REDACTED]'
+                    });
+
+                    if (detectedPII.length > 0) {
+                        console.warn(`[Security] Tool ${TOOL_NAME}: Redacted PII types:`, detectedPII);
+                    }
+
+                    const finalResult = redacted;
+                    // ⭐ End of Step 4.5
+
                     // 5. Consume tokens WITH RETRY and idempotency protection
                     await consumeTokensWithRetry(
                         this.env.TOKEN_DB,
@@ -116,7 +145,7 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                         "opensky",
                         TOOL_NAME,
                         { icao24 },
-                        result,
+                        finalResult,
                         true,
                         actionId
                     );
@@ -125,7 +154,7 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                     return {
                         content: [{
                             type: "text" as const,
-                            text: result
+                            text: finalResult
                         }]
                     };
                 } catch (error) {
@@ -204,6 +233,34 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                         }, null, 2)
                         : `No aircraft currently flying within ${radius_km}km of (${latitude}, ${longitude})`;
 
+                    // ⭐ Step 4.5: Security Processing
+                    const sanitized = sanitizeOutput(result, {
+                        removeHtml: true,
+                        removeControlChars: true,
+                        normalizeWhitespace: true,
+                        maxLength: 5000
+                    });
+
+                    const { redacted, detectedPII } = redactPII(sanitized, {
+                        redactEmails: false,
+                        redactPhones: true,
+                        redactCreditCards: true,
+                        redactSSN: true,
+                        redactBankAccounts: true,
+                        redactPESEL: true,
+                        redactPolishIdCard: true,
+                        redactPolishPassport: true,
+                        redactPolishPhones: true,
+                        placeholder: '[REDACTED]'
+                    });
+
+                    if (detectedPII.length > 0) {
+                        console.warn(`[Security] Tool ${TOOL_NAME}: Redacted PII types:`, detectedPII);
+                    }
+
+                    const finalResult = redacted;
+                    // ⭐ End of Step 4.5
+
                     // 5. Consume tokens
                     await consumeTokensWithRetry(
                         this.env.TOKEN_DB,
@@ -212,7 +269,7 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                         "opensky",
                         TOOL_NAME,
                         { latitude, longitude, radius_km },
-                        result,
+                        finalResult,
                         true,
                         actionId
                     );
@@ -221,7 +278,7 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                     return {
                         content: [{
                             type: "text" as const,
-                            text: result
+                            text: finalResult
                         }]
                     };
                 } catch (error) {
@@ -287,6 +344,34 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                         ? JSON.stringify(aircraft, null, 2)
                         : `No aircraft found with callsign: ${callsign} (aircraft may not be currently flying)`;
 
+                    // ⭐ Step 4.5: Security Processing
+                    const sanitized = sanitizeOutput(result, {
+                        removeHtml: true,
+                        removeControlChars: true,
+                        normalizeWhitespace: true,
+                        maxLength: 5000
+                    });
+
+                    const { redacted, detectedPII } = redactPII(sanitized, {
+                        redactEmails: false,
+                        redactPhones: true,
+                        redactCreditCards: true,
+                        redactSSN: true,
+                        redactBankAccounts: true,
+                        redactPESEL: true,
+                        redactPolishIdCard: true,
+                        redactPolishPassport: true,
+                        redactPolishPhones: true,
+                        placeholder: '[REDACTED]'
+                    });
+
+                    if (detectedPII.length > 0) {
+                        console.warn(`[Security] Tool ${TOOL_NAME}: Redacted PII types:`, detectedPII);
+                    }
+
+                    const finalResult = redacted;
+                    // ⭐ End of Step 4.5
+
                     // 5. Consume tokens
                     await consumeTokensWithRetry(
                         this.env.TOKEN_DB,
@@ -295,7 +380,7 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                         "opensky",
                         TOOL_NAME,
                         { callsign },
-                        result,
+                        finalResult,
                         true,
                         actionId
                     );
@@ -304,7 +389,7 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                     return {
                         content: [{
                             type: "text" as const,
-                            text: result
+                            text: finalResult
                         }]
                     };
                 } catch (error) {

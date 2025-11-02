@@ -27,6 +27,7 @@ import { z } from "zod";
 import { OpenSkyClient } from "./api-client";
 import { checkBalance, consumeTokensWithRetry } from "./tokenConsumption";
 import { formatInsufficientTokensError, formatAccountDeletedError } from "./tokenUtils";
+import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
 
 /**
  * Simple LRU (Least Recently Used) Cache for MCP Server instances
@@ -695,6 +696,34 @@ async function executeGetAircraftByIcaoTool(
     ? JSON.stringify(aircraft, null, 2)
     : `No aircraft found with ICAO24: ${args.icao24} (aircraft may not be currently flying)`;
 
+  // ⭐ Step 4.5: Security Processing
+  const sanitized = sanitizeOutput(result, {
+    removeHtml: true,
+    removeControlChars: true,
+    normalizeWhitespace: true,
+    maxLength: 5000
+  });
+
+  const { redacted, detectedPII } = redactPII(sanitized, {
+    redactEmails: false,
+    redactPhones: true,
+    redactCreditCards: true,
+    redactSSN: true,
+    redactBankAccounts: true,
+    redactPESEL: true,
+    redactPolishIdCard: true,
+    redactPolishPassport: true,
+    redactPolishPhones: true,
+    placeholder: '[REDACTED]'
+  });
+
+  if (detectedPII.length > 0) {
+    console.warn(`[Security] Tool ${TOOL_NAME}: Redacted PII types:`, detectedPII);
+  }
+
+  const finalResult = redacted;
+  // ⭐ End of Step 4.5
+
   await consumeTokensWithRetry(
     env.TOKEN_DB,
     userId,
@@ -702,13 +731,13 @@ async function executeGetAircraftByIcaoTool(
     "opensky",
     TOOL_NAME,
     args,
-    result,
+    finalResult,
     true,
     actionId
   );
 
   return {
-    content: [{ type: "text" as const, text: result }],
+    content: [{ type: "text" as const, text: finalResult }],
   };
 }
 
@@ -771,6 +800,34 @@ async function executeFindAircraftNearLocationTool(
       }, null, 2)
     : `No aircraft currently flying within ${args.radius_km}km of (${args.latitude}, ${args.longitude})`;
 
+  // ⭐ Step 4.5: Security Processing
+  const sanitized = sanitizeOutput(result, {
+    removeHtml: true,
+    removeControlChars: true,
+    normalizeWhitespace: true,
+    maxLength: 5000
+  });
+
+  const { redacted, detectedPII } = redactPII(sanitized, {
+    redactEmails: false,
+    redactPhones: true,
+    redactCreditCards: true,
+    redactSSN: true,
+    redactBankAccounts: true,
+    redactPESEL: true,
+    redactPolishIdCard: true,
+    redactPolishPassport: true,
+    redactPolishPhones: true,
+    placeholder: '[REDACTED]'
+  });
+
+  if (detectedPII.length > 0) {
+    console.warn(`[Security] Tool ${TOOL_NAME}: Redacted PII types:`, detectedPII);
+  }
+
+  const finalResult = redacted;
+  // ⭐ End of Step 4.5
+
   await consumeTokensWithRetry(
     env.TOKEN_DB,
     userId,
@@ -778,13 +835,13 @@ async function executeFindAircraftNearLocationTool(
     "opensky",
     TOOL_NAME,
     args,
-    result,
+    finalResult,
     true,
     actionId
   );
 
   return {
-    content: [{ type: "text" as const, text: result }],
+    content: [{ type: "text" as const, text: finalResult }],
   };
 }
 
@@ -838,6 +895,34 @@ async function executeGetAircraftByCallsignTool(
     ? JSON.stringify(aircraft, null, 2)
     : `No aircraft found with callsign: ${args.callsign} (aircraft may not be currently flying)`;
 
+  // ⭐ Step 4.5: Security Processing
+  const sanitized = sanitizeOutput(result, {
+    removeHtml: true,
+    removeControlChars: true,
+    normalizeWhitespace: true,
+    maxLength: 5000
+  });
+
+  const { redacted, detectedPII } = redactPII(sanitized, {
+    redactEmails: false,
+    redactPhones: true,
+    redactCreditCards: true,
+    redactSSN: true,
+    redactBankAccounts: true,
+    redactPESEL: true,
+    redactPolishIdCard: true,
+    redactPolishPassport: true,
+    redactPolishPhones: true,
+    placeholder: '[REDACTED]'
+  });
+
+  if (detectedPII.length > 0) {
+    console.warn(`[Security] Tool ${TOOL_NAME}: Redacted PII types:`, detectedPII);
+  }
+
+  const finalResult = redacted;
+  // ⭐ End of Step 4.5
+
   await consumeTokensWithRetry(
     env.TOKEN_DB,
     userId,
@@ -845,13 +930,13 @@ async function executeGetAircraftByCallsignTool(
     "opensky",
     TOOL_NAME,
     args,
-    result,
+    finalResult,
     true,
     actionId
   );
 
   return {
-    content: [{ type: "text" as const, text: result }],
+    content: [{ type: "text" as const, text: finalResult }],
   };
 }
 
