@@ -40,7 +40,7 @@
     {
       "new_sqlite_classes": ["OpenSkyMcp"],  // TODO: Update to match your class name
       "tag": "v1"
-    }
+    },
   ],
 
   /**
@@ -51,7 +51,7 @@
       {
         "class_name": "OpenSkyMcp",  // TODO: Update to match your class name
         "name": "MCP_OBJECT"          // Binding name (used internally by McpAgent)
-      }
+      },
     ]
   },
 
@@ -84,7 +84,7 @@
       "binding": "USER_SESSIONS",
       "id": "e5ad189139cd44f38ba0224c3d596c73",         // From CLOUDFLARE_CONFIG.md (MANDATORY)
       "preview_id": "49c43fb4d6e242db87fd885ba46b5a1d"  // For local testing
-    }
+    },
   ],
 
   /**
@@ -99,7 +99,7 @@
       "binding": "TOKEN_DB",
       "database_name": "mcp-tokens-database",
       "database_id": "ebb389aa-2d65-4d38-a0da-50c7da9dfe8b"
-    }
+    },
   ],
 
   /**
@@ -120,7 +120,7 @@
   //   {
   //     "binding": "MY_BUCKET",
   //     "bucket_name": "your-bucket-name"
-  //   }
+  //   },
   // ],
 
 
@@ -140,7 +140,7 @@
     {
       "pattern": "opensky.wtyczki.ai",
       "custom_domain": true
-    }
+    },
   ],
 
   /**
@@ -172,5 +172,8 @@
    */
   "dev": {
     "port": 8787
-  }
+  },
+  "vars": {
+    "AI_GATEWAY_ID": "mcp-production-gateway"
+  },
 }

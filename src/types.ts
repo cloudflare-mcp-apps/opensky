@@ -50,6 +50,18 @@ export interface Env {
 
     /** KV namespace for API response caching */
     CACHE_KV: KVNamespace;
+
+    /**
+     * Cloudflare AI Gateway Configuration
+     *
+     * Route all AI requests through AI Gateway for:
+     * - Authenticated access control
+     * - Rate limiting (60 requests/hour per user)
+     * - Response caching (1-hour TTL)
+     * - Analytics and monitoring
+     */
+    AI_GATEWAY_ID: string;
+    AI_GATEWAY_TOKEN: string;
 }
 
 /**
