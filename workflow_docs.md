@@ -95,10 +95,6 @@ To enable automatic deployments on every git push, follow these steps:
    - Pull request comment shows build status
    - Worker updates automatically
 
-#### Option 2: GitHub Actions (Advanced)
-
-See `/Users/patpil/Documents/ai-projects/Cloudflare_mcp/GITHUB_INTEGRATION_GUIDE.md` for workflow configuration.
-
 ---
 
 ## Testing Checklist
