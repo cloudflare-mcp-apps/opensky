@@ -178,7 +178,7 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
             "findAircraftNearLocation",
             "Find all aircraft currently flying near a geographic location. " +
             "Provide latitude, longitude, and search radius in kilometers. " +
-            "Server calculates the bounding box and queries OpenSky API for all aircraft in that area. " +
+            "Server calculates the bounding box and queries for all aircraft in that area. " +
             "Returns list of aircraft with position, velocity, altitude, callsign, and origin country. " +
             "⚠️ This tool costs 3 tokens per use.",
             {
