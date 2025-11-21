@@ -496,10 +496,6 @@ Unlike most MCP servers with single authentication layer, OpenSky implements **t
 }
 ```
 
-**Comparison to Stateless Servers**:
-- Western-astrology: No state (API key authentication only)
-- OpenSky: Stateful (OAuth2 token lifecycle management)
-
 ### Expensive Tool as Warning Pattern
 
 **getAircraftByCallsign (10 tokens)** serves as an economic disincentive:

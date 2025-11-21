@@ -8,7 +8,7 @@
  * - WorkOS Secrets: API Key and Client ID for authentication
  *
  * TODO: Update the following:
- * 1. Change "name" to match your server (e.g., "weather-mcp", "news-mcp")
+ * 1. Change "name" to match your server (e.g., "weather", "news")
  * 2. Update "new_sqlite_classes" with your McpAgent class name
  * 3. Update "class_name" in durable_objects.bindings to match
  * 4. Verify KV namespace IDs match CLOUDFLARE_CONFIG.md (already configured - DO NOT change)
@@ -23,7 +23,7 @@
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "opensky",  // TODO: Change to your server name (e.g., "weather-mcp")
+  "name": "opensky",  // TODO: Change to your server name (e.g., "weather")
   "main": "src/index.ts",
   "compatibility_date": "2025-03-10",
   "compatibility_flags": ["nodejs_compat"],

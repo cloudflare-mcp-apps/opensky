@@ -10,7 +10,6 @@ Production-ready template for building Cloudflare MCP servers with integrated to
 ✅ **Token System Integration** - Pay-per-use with shared D1 database
 ✅ **WorkOS Magic Auth** - Email + 6-digit code authentication
 ✅ **Production-Ready** - Complete error handling, logging, type safety
-✅ **15-30 Minute Setup** - Copy, customize, deploy
 
 ## Quick Setup
 
