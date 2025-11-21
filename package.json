@@ -3,6 +3,11 @@
   "version": "1.0.0",
   "description": "Skeleton template for Cloudflare MCP servers with token integration",
   "private": true,
+  "overrides": {
+    "iron-session": {
+      "cookie": "^0.7.0"
+    }
+  },
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
