@@ -47,6 +47,22 @@
 
 * **Primary Domain**: https://opensky.wtyczki.ai
 
+* **AnythingLLM MCP Configuration**:
+```json
+{
+  "mcpServers": {
+    "opensky": {
+      "url": "https://opensky.wtyczki.ai/mcp",
+      "transport": "http",
+      "headers": {
+        "Authorization": "Bearer wtyk_YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+Note: The server name ("opensky") is a local identifier - change it to whatever you prefer.
+
 * **Workers AI status (is active, model)**: Configured but not active - AI binding present, reserved for future enhancements
 
 * **Caching strategy**: No caching implemented. Rationale: Aircraft positions change every 10-15 seconds (real-time tracking); caching would provide stale/incorrect data; users expect current positions; CACHE_KV configured but intentionally not used.
