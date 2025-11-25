@@ -292,7 +292,6 @@ async function getOrCreateServer(
     "Get aircraft details by ICAO 24-bit transponder address (hex string, e.g., '3c6444'). " +
     "This is a direct lookup - very fast and cheap. " +
     "Returns current position, velocity, altitude, and callsign if aircraft is currently flying. " +
-    "⚠️ This tool costs 1 token per use.",
     {
       icao24: z.string().length(6).regex(/^[0-9a-fA-F]{6}$/)
         .describe("ICAO 24-bit address (6 hex characters, e.g., '3c6444' or 'a8b2c3')"),
@@ -312,7 +311,6 @@ async function getOrCreateServer(
     "Provide latitude, longitude, and search radius in kilometers. " +
     "Server calculates the bounding box and queries for all aircraft in that area. " +
     "Returns list of aircraft with position, velocity, altitude, callsign, and origin country. " +
-    "⚠️ This tool costs 3 tokens per use.",
     {
       latitude: z.number().min(-90).max(90)
         .describe("Center point latitude in decimal degrees (-90 to 90, e.g., 52.2297 for Warsaw)"),
@@ -336,7 +334,6 @@ async function getOrCreateServer(
     "This requires a global scan of ALL currently flying aircraft (expensive operation). " +
     "Provide the aircraft callsign (e.g., 'LOT456', 'UAL123'). " +
     "Returns aircraft position, velocity, altitude, and origin country if found. " +
-    "⚠️ This tool costs 10 tokens per use (global scan is expensive).",
     {
       callsign: z.string().min(1).max(8).regex(/^[A-Z0-9]+$/)
         .describe("Aircraft callsign (1-8 alphanumeric characters, e.g., 'LOT456' or 'UAL123')"),
@@ -494,7 +491,6 @@ async function handleToolsList(
         "Get aircraft details by ICAO 24-bit transponder address (hex string, e.g., '3c6444'). " +
         "This is a direct lookup - very fast and cheap. " +
         "Returns current position, velocity, altitude, and callsign if aircraft is currently flying. " +
-        "⚠️ This tool costs 1 token per use.",
       inputSchema: {
         type: "object",
         properties: {
@@ -516,7 +512,6 @@ async function handleToolsList(
         "Provide latitude, longitude, and search radius in kilometers. " +
         "Server calculates the bounding box and queries OpenSky API for all aircraft in that area. " +
         "Returns list of aircraft with position, velocity, altitude, callsign, and origin country. " +
-        "⚠️ This tool costs 3 tokens per use.",
       inputSchema: {
         type: "object",
         properties: {
@@ -549,7 +544,6 @@ async function handleToolsList(
         "This requires a global scan of ALL currently flying aircraft (expensive operation). " +
         "Provide the aircraft callsign (e.g., 'LOT456', 'UAL123'). " +
         "Returns aircraft position, velocity, altitude, and origin country if found. " +
-        "⚠️ This tool costs 10 tokens per use (global scan is expensive).",
       inputSchema: {
         type: "object",
         properties: {
