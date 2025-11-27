@@ -2,12 +2,14 @@ import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
 import { z } from "zod";
+import { createUIResource } from "@mcp-ui/server";
 import { OpenSkyClient } from "./api-client";
 import type { Env, State } from "./types";
 import type { Props } from "./props";
 import { checkBalance, consumeTokensWithRetry } from "./tokenConsumption";
 import { formatInsufficientTokensError } from "./tokenUtils";
 import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
+import { generateFlightMapHTML } from "./ui/flight-map-generator";
 
 /**
  * OpenSky Flight Tracker MCP Server
@@ -280,17 +282,47 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                         actionId
                     );
 
-                    // 6. Return result
+                    // 6. Return result as MCP-UI resource
                     const structuredResult = aircraftList.length > 0
                         ? { search_center: { latitude, longitude }, radius_km, aircraft_count: aircraftList.length, aircraft: aircraftList }
                         : null;
-                    return {
-                        content: [{
-                            type: "text" as const,
-                            text: finalResult
-                        }],
-                        structuredContent: structuredResult as any
-                    };
+
+                    // Generate interactive Leaflet map HTML
+                    if (aircraftList.length > 0) {
+                        const mapHTML = generateFlightMapHTML({
+                            search_center: { latitude, longitude },
+                            radius_km,
+                            aircraft_count: aircraftList.length,
+                            aircraft: aircraftList
+                        });
+
+                        const uiResource = createUIResource({
+                            uri: `ui://opensky/flight-map-${Date.now()}`,
+                            content: {
+                                type: 'rawHtml',
+                                htmlString: mapHTML
+                            },
+                            encoding: 'text',
+                            metadata: {
+                                title: 'Flight Map',
+                                description: `${aircraftList.length} aircraft near ${latitude}, ${longitude}`
+                            }
+                        });
+
+                        return {
+                            content: [uiResource as any],
+                            structuredContent: structuredResult as any
+                        };
+                    } else {
+                        // No aircraft found - return text message
+                        return {
+                            content: [{
+                                type: "text" as const,
+                                text: `No aircraft currently flying within ${radius_km}km of (${latitude}, ${longitude})`
+                            }],
+                            structuredContent: null
+                        };
+                    }
                 } catch (error) {
                     return {
                         content: [{

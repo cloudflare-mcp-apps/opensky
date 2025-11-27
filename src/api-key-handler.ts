@@ -25,10 +25,12 @@ import type { Env, State } from "./types";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
 import { z } from "zod";
+import { createUIResource } from "@mcp-ui/server";
 import { OpenSkyClient } from "./api-client";
 import { checkBalance, consumeTokensWithRetry } from "./tokenConsumption";
 import { formatInsufficientTokensError, formatAccountDeletedError } from "./tokenUtils";
 import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
+import { generateFlightMapHTML } from "./ui/flight-map-generator";
 
 /**
  * Simple LRU (Least Recently Used) Cache for MCP Server instances
@@ -861,9 +863,47 @@ async function executeFindAircraftNearLocationTool(
     actionId
   );
 
-  return {
-    content: [{ type: "text" as const, text: finalResult }],
-  };
+  // Return as MCP-UI resource with interactive map
+  if (aircraftList.length > 0) {
+    const mapHTML = generateFlightMapHTML({
+      search_center: { latitude: args.latitude, longitude: args.longitude },
+      radius_km: args.radius_km,
+      aircraft_count: aircraftList.length,
+      aircraft: aircraftList
+    });
+
+    const uiResource = createUIResource({
+      uri: `ui://opensky/flight-map-${Date.now()}`,
+      content: {
+        type: 'rawHtml',
+        htmlString: mapHTML
+      },
+      encoding: 'text',
+      metadata: {
+        title: 'Flight Map',
+        description: `${aircraftList.length} aircraft near ${args.latitude}, ${args.longitude}`
+      }
+    });
+
+    return {
+      content: [uiResource as any],
+      structuredContent: {
+        search_center: { latitude: args.latitude, longitude: args.longitude },
+        radius_km: args.radius_km,
+        aircraft_count: aircraftList.length,
+        aircraft: aircraftList
+      }
+    };
+  } else {
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: `No aircraft currently flying within ${args.radius_km}km of (${args.latitude}, ${args.longitude})`
+        }
+      ]
+    };
+  }
 }
 
 /**
