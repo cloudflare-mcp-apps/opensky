@@ -10,6 +10,8 @@ Production-ready template for building Cloudflare MCP servers with integrated to
 ✅ **Token System Integration** - Pay-per-use with shared D1 database
 ✅ **WorkOS Magic Auth** - Email + 6-digit code authentication
 ✅ **Production-Ready** - Complete error handling, logging, type safety
+✅ **Interactive Maps** - MCP-UI Leaflet maps for aircraft visualization
+✅ **Visual Flight Tracking** - Real-time aircraft positions, altitude, heading, speed
 
 ## Quick Setup
 
@@ -108,6 +110,81 @@ wrangler deploy
 
 Both transports work identically and are tested in Cloudflare Workers AI Playground after deployment.
 
+## Interactive Flight Maps (MCP-UI)
+
+### Visual Representation
+
+The `findAircraftNearLocation` tool now returns interactive Leaflet maps showing real-time aircraft positions instead of plain JSON text.
+
+**Features:**
+- 🗺️ **Interactive Map** - OpenStreetMap tiles with zoom/pan controls
+- ✈️ **Aircraft Markers** - Airplane icons rotated to show flight direction
+- 📍 **Search Radius Circle** - Visual representation of search area
+- 🔍 **Info Popups** - Click any aircraft marker to see:
+  - Callsign (flight number)
+  - ICAO24 address (hex code)
+  - Country of origin
+  - Altitude (meters)
+  - Ground speed (km/h)
+  - True heading (degrees)
+  - Vertical rate (m/s)
+  - On-ground/in-flight status
+- 📊 **Info Panel** - Summary statistics (center, radius, aircraft count)
+- 🎨 **Color-Coded Altitude** - Visual distinction between altitude bands
+- 📱 **Responsive Design** - Works in MCP clients (Claude Desktop, ChatGPT)
+
+### Implementation Details
+
+**Response Format:**
+```typescript
+{
+  content: [
+    {
+      type: 'resource',
+      resource: {
+        uri: 'ui://opensky/flight-map-{timestamp}',
+        mimeType: 'text/html',
+        text: '<complete self-contained HTML with Leaflet map>'
+      }
+    }
+  ],
+  structuredContent: {
+    search_center: { latitude, longitude },
+    radius_km,
+    aircraft_count,
+    aircraft: [ /* AircraftData[] */ ]
+  }
+}
+```
+
+**Self-Contained:** The HTML response is 100% self-contained:
+- Leaflet CSS/JS loaded from unpkg.com CDN
+- No external dependencies at runtime (beyond CDN)
+- No API calls from client-side
+- Safe to render in sandboxed iframes
+
+**Backward Compatibility:**
+- `structuredContent` field provides raw JSON data
+- Clients that can't render HTML can still access structured data
+- Works across all MCP transport types (SSE and Streamable HTTP)
+
+### Testing Maps Locally
+
+Generate a test HTML file to verify map rendering before deployment:
+
+```bash
+# Generate test-map.html with sample aircraft data
+npx tsx scripts/test-map-generator.ts
+
+# Open test-map.html in your web browser
+open test-map.html
+```
+
+This creates a standalone HTML file showing 3 aircraft around Warsaw with:
+- 25km search radius
+- Sample flight data (LOT456, RYR789, BAW123)
+- All interactive features enabled
+
 ## Testing Approach
 
 **CRITICAL:** All functional testing is done using **Cloudflare Workers AI Playground** after deployment.
@@ -163,19 +240,25 @@ npx tsc --noEmit  # MUST pass with zero errors
 ## Project Structure
 
 ```
-mcp-server-skeleton/
+opensky/
 ├── src/
-│   ├── index.ts              # Entry point (dual transport)
-│   ├── server.ts             # McpAgent with example tools
-│   ├── authkit-handler.ts    # WorkOS OAuth + DB check
-│   ├── types.ts              # Type definitions
-│   ├── props.ts              # Auth context
-│   ├── tokenUtils.ts         # Token management
-│   └── api-client.ts         # API client template
-├── docs/                     # Detailed guides
-├── wrangler.jsonc            # Cloudflare config
-├── package.json              # Dependencies
-└── README.md                 # This file
+│   ├── index.ts                    # Entry point (dual transport)
+│   ├── server.ts                   # McpAgent with 3 flight tools
+│   ├── api-key-handler.ts          # API key authentication
+│   ├── authkit-handler.ts          # WorkOS OAuth + DB check
+│   ├── types.ts                    # Type definitions
+│   ├── props.ts                    # Auth context
+│   ├── tokenUtils.ts               # Token management
+│   ├── api-client.ts               # OpenSky API client
+│   ├── tokenConsumption.ts         # Token deduction logic
+│   └── ui/
+│       └── flight-map-generator.ts # MCP-UI Leaflet map HTML generation
+├── scripts/
+│   └── test-map-generator.ts       # Generate test-map.html locally
+├── docs/                           # Detailed guides
+├── wrangler.jsonc                  # Cloudflare config
+├── package.json                    # Dependencies
+└── README.md                       # This file
 ```
 
 ## Key TODO Items
