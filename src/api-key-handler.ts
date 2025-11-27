@@ -23,6 +23,7 @@ import { validateApiKey } from "./apiKeys";
 import { getUserById } from "./tokenUtils";
 import type { Env, State } from "./types";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
 import { z } from "zod";
 import { OpenSkyClient } from "./api-client";
 import { checkBalance, consumeTokensWithRetry } from "./tokenConsumption";
@@ -287,14 +288,17 @@ async function getOrCreateServer(
   // ========================================================================
   // Tool 1: Get Aircraft by ICAO24 (1 token cost)
   // ========================================================================
-  server.tool(
+  server.registerTool(
     "getAircraftByIcao",
-    "Get aircraft details by ICAO 24-bit transponder address (hex string, e.g., '3c6444'). " +
-    "This is a direct lookup - very fast and cheap. " +
-    "Returns current position, velocity, altitude, and callsign if aircraft is currently flying. " +
     {
-      icao24: z.string().length(6).regex(/^[0-9a-fA-F]{6}$/)
-        .describe("ICAO 24-bit address (6 hex characters, e.g., '3c6444' or 'a8b2c3')"),
+      title: "Get Aircraft By ICAO",
+      description: "Get aircraft details by ICAO 24-bit transponder address (hex string, e.g., '3c6444'). " +
+        "This is a direct lookup - very fast and cheap. " +
+        "Returns current position, velocity, altitude, and callsign if aircraft is currently flying.",
+      inputSchema: {
+        icao24: z.string().length(6).regex(/^[0-9a-fA-F]{6}$/)
+          .describe("ICAO 24-bit address (6 hex characters, e.g., '3c6444' or 'a8b2c3')"),
+      }
     },
     async ({ icao24 }) => {
       // Implementation handled in executeGetAircraftByIcaoTool()
@@ -305,19 +309,22 @@ async function getOrCreateServer(
   // ========================================================================
   // Tool 2: Find Aircraft Near Location (3 tokens cost)
   // ========================================================================
-  server.tool(
+  server.registerTool(
     "findAircraftNearLocation",
-    "Find all aircraft currently flying near a geographic location. " +
-    "Provide latitude, longitude, and search radius in kilometers. " +
-    "Server calculates the bounding box and queries for all aircraft in that area. " +
-    "Returns list of aircraft with position, velocity, altitude, callsign, and origin country. " +
     {
-      latitude: z.number().min(-90).max(90)
-        .describe("Center point latitude in decimal degrees (-90 to 90, e.g., 52.2297 for Warsaw)"),
-      longitude: z.number().min(-180).max(180)
-        .describe("Center point longitude in decimal degrees (-180 to 180, e.g., 21.0122 for Warsaw)"),
-      radius_km: z.number().min(1).max(1000)
-        .describe("Search radius in kilometers (1-1000, e.g., 25 for 25km radius)"),
+      title: "Find Aircraft Near Location",
+      description: "Find all aircraft currently flying near a geographic location. " +
+        "Provide latitude, longitude, and search radius in kilometers. " +
+        "Server calculates the bounding box and queries for all aircraft in that area. " +
+        "Returns list of aircraft with position, velocity, altitude, callsign, and origin country.",
+      inputSchema: {
+        latitude: z.number().min(-90).max(90)
+          .describe("Center point latitude in decimal degrees (-90 to 90, e.g., 52.2297 for Warsaw)"),
+        longitude: z.number().min(-180).max(180)
+          .describe("Center point longitude in decimal degrees (-180 to 180, e.g., 21.0122 for Warsaw)"),
+        radius_km: z.number().min(1).max(1000)
+          .describe("Search radius in kilometers (1-1000, e.g., 25 for 25km radius)"),
+      }
     },
     async ({ latitude, longitude, radius_km }) => {
       // Implementation handled in executeFindAircraftNearLocationTool()
@@ -328,15 +335,18 @@ async function getOrCreateServer(
   // ========================================================================
   // Tool 3: Get Aircraft by Callsign (10 tokens cost)
   // ========================================================================
-  server.tool(
+  server.registerTool(
     "getAircraftByCallsign",
-    "Find aircraft by callsign (flight number). " +
-    "This requires a global scan of ALL currently flying aircraft (expensive operation). " +
-    "Provide the aircraft callsign (e.g., 'LOT456', 'UAL123'). " +
-    "Returns aircraft position, velocity, altitude, and origin country if found. " +
     {
-      callsign: z.string().min(1).max(8).regex(/^[A-Z0-9]+$/)
-        .describe("Aircraft callsign (1-8 alphanumeric characters, e.g., 'LOT456' or 'UAL123')"),
+      title: "Get Aircraft By Callsign",
+      description: "Find aircraft by callsign (flight number). " +
+        "This requires a global scan of ALL currently flying aircraft (expensive operation). " +
+        "Provide the aircraft callsign (e.g., 'LOT456', 'UAL123'). " +
+        "Returns aircraft position, velocity, altitude, and origin country if found.",
+      inputSchema: {
+        callsign: z.string().min(1).max(8).regex(/^[A-Z0-9]+$/)
+          .describe("Aircraft callsign (1-8 alphanumeric characters, e.g., 'LOT456' or 'UAL123')"),
+      }
     },
     async ({ callsign }) => {
       // Implementation handled in executeGetAircraftByCallsignTool()
@@ -382,6 +392,23 @@ async function handleHTTPTransport(
   console.log(`📡 [API Key Auth] HTTP transport request from ${userEmail}`);
 
   try {
+    // DNS Rebinding Protection: Validate origin header
+    const origin = request.headers.get('origin');
+    const ALLOWED_ORIGINS = [
+      'https://claude.ai',
+      'https://chatgpt.com',
+      'https://panel.wtyczki.ai',
+      'https://anythingllm.local'
+    ];
+
+    if (origin && !ALLOWED_ORIGINS.includes(origin)) {
+      console.warn(`[Security] Blocked request from origin: ${origin}`);
+      return jsonRpcResponse("error", null, {
+        code: -32603,
+        message: 'Request origin not allowed'
+      });
+    }
+
     // Parse JSON-RPC request
     const jsonRpcRequest = await request.json() as {
       jsonrpc: string;
@@ -490,7 +517,7 @@ async function handleToolsList(
       description:
         "Get aircraft details by ICAO 24-bit transponder address (hex string, e.g., '3c6444'). " +
         "This is a direct lookup - very fast and cheap. " +
-        "Returns current position, velocity, altitude, and callsign if aircraft is currently flying. " +
+        "Returns current position, velocity, altitude, and callsign if aircraft is currently flying.",
       inputSchema: {
         type: "object",
         properties: {
@@ -511,7 +538,7 @@ async function handleToolsList(
         "Find all aircraft currently flying near a geographic location. " +
         "Provide latitude, longitude, and search radius in kilometers. " +
         "Server calculates the bounding box and queries OpenSky API for all aircraft in that area. " +
-        "Returns list of aircraft with position, velocity, altitude, callsign, and origin country. " +
+        "Returns list of aircraft with position, velocity, altitude, callsign, and origin country.",
       inputSchema: {
         type: "object",
         properties: {
@@ -543,7 +570,7 @@ async function handleToolsList(
         "Find aircraft by callsign (flight number). " +
         "This requires a global scan of ALL currently flying aircraft (expensive operation). " +
         "Provide the aircraft callsign (e.g., 'LOT456', 'UAL123'). " +
-        "Returns aircraft position, velocity, altitude, and origin country if found. " +
+        "Returns aircraft position, velocity, altitude, and origin country if found.",
       inputSchema: {
         type: "object",
         properties: {

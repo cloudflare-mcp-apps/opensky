@@ -1,6 +1,6 @@
 # OpenSky Flight Tracker - Infrastructure Snapshot
 
-**Generated**: 2025-11-20
+**Generated**: 2025-11-27 (Updated for SDK 1.20+ Migration)
 **Repository**: opensky
 **Status**: Production
 
@@ -29,6 +29,24 @@
 - **Configuration**: Token stored as `AI_GATEWAY_TOKEN` secret
 - **Current Usage**: Not actively used (no AI inference in this server)
 - **Purpose**: Ready for future AI features (flight path prediction, delay analysis)
+
+---
+
+## 2.1 SDK 1.20+ Features
+
+### registerTool() API
+- **Status**: Fully implemented in all 3 tools
+- **Coverage**: Both OAuth path (server.ts) and API key path (api-key-handler.ts)
+- **Benefits**: Cleaner syntax with separate title and description fields, better LLM integration
+
+### structuredContent Field
+- **Status**: Implemented for all tool returns
+- **Purpose**: Direct JSON data access for LLMs without text parsing
+- **Implementation**: All tools return both `content` (text) and `structuredContent` (structured data)
+
+### Dependencies
+- `@modelcontextprotocol/sdk`: ^1.20.1
+- `agents`: ^0.2.14
 
 ---
 
@@ -350,6 +368,34 @@ return {
 - Good accuracy for < 100km radius
 - Breaks down near poles (latitude convergence)
 - For production at scale, consider haversine formula
+
+### SDK 1.20+ Implementation
+
+**registerTool() API Migration**:
+- All 3 tools migrated from deprecated `server.tool()` to new `registerTool()` API
+- Both OAuth (server.ts) and API key (api-key-handler.ts) paths have feature parity
+- Cleaner syntax with separate `title` and `description` fields
+- Better LLM integration and prompt understanding
+
+**structuredContent Field**:
+- All tool returns include both `content` (text) and `structuredContent` (structured JSON)
+- Enables direct data access for Claude and other LLM clients
+- LLMs can access aircraft objects without text parsing
+- Improves reliability of follow-up queries
+
+### Security Enhancements
+
+**API Key Path Security**:
+- DNS rebinding protection: Origin header validation with whitelist
+- Allowed origins: claude.ai, chatgpt.com, panel.wtyczki.ai, anythingllm.local
+- Prevents malicious websites from hijacking API connections
+
+**PII Redaction**:
+- All tool outputs pass through pilpat-mcp-security v1.1.0
+- Step 4.5 security processing in all 6 tool paths (3 OAuth + 3 API key)
+- Redacts: credit cards, SSN, bank accounts, phones, Polish ID patterns
+- Email redaction disabled by default
+- Security events logged with detected PII types
 
 ---
 

@@ -1,6 +1,6 @@
 # OpenSky Flight Tracker MCP Server - Mini Snapshot
 
-**Generated**: 2025-11-21
+**Generated**: 2025-11-27 (Updated for SDK 1.20+ Migration)
 
 ---
 
@@ -70,11 +70,14 @@ Note: The server name ("opensky") is a local identifier - change it to whatever 
 ---
 
 **Architecture Notes**:
+- **SDK 1.20+ Features**: registerTool() API for cleaner tool registration, structuredContent field for LLM optimization
+  - All 3 tools use registerTool() API (both OAuth and API key paths)
+  - structuredContent enables direct JSON access for Claude and other LLM clients
 - Dual-layer authentication: WorkOS (user auth) + OpenSky OAuth2 client credentials (API auth)
 - Stateful Durable Object: Stores OpenSky access_token with 30-minute expiry and 5-minute auto-refresh buffer
 - Expensive tool as warning pattern: getAircraftByCallsign (10 tokens) discourages global scans
 - LLM-optimized data transformation: 3-stage pipeline (raw → parsed → semantic grouping)
 - Geographic calculations: Flat-Earth bounding box approximation (accurate for < 100km radius)
 - External API: OpenSky Network REST API (OAuth2 client credentials)
-- Dual authentication: OAuth (server.ts) complete, API key path (api-key-handler.ts) pending
-- Security: Step 4.5 implemented in OAuth path (3 tool paths)
+- Dual authentication: OAuth (server.ts) + API key (api-key-handler.ts) both fully implemented with registerTool() parity
+- Security: Step 4.5 implemented in all 6 tool paths (3 OAuth + 3 API key), DNS rebinding protection added to API key path
