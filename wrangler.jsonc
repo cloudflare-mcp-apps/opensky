@@ -29,6 +29,14 @@
   "compatibility_flags": ["nodejs_compat"],
 
   /**
+   * Build command for GitHub → Cloudflare deployment
+   * Ensures dependencies are installed before TypeScript compilation
+   */
+  "build": {
+    "command": "npm install && npx tsc --noEmit"
+  },
+
+  /**
    * CRITICAL: Migrations for Durable Objects
    *
    * McpAgent ALWAYS requires Durable Objects configuration, even for "stateless" servers.
