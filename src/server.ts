@@ -1,7 +1,6 @@
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
-import { z } from "zod";
 import { createUIResource } from "@mcp-ui/server";
 import { OpenSkyClient } from "./api-client";
 import type { Env, State } from "./types";
@@ -10,6 +9,16 @@ import { checkBalance, consumeTokensWithRetry } from "./shared/tokenConsumption"
 import { formatInsufficientTokensError } from "./shared/tokenUtils";
 import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
 import { generateFlightMapHTML } from "./optional/ui/flight-map-generator";
+import {
+    GetAircraftByIcaoInput,
+    FindAircraftNearLocationInput,
+    GetAircraftByCallsignInput,
+} from "./schemas/inputs";
+import {
+    GetAircraftByIcaoOutputSchema,
+    FindAircraftNearLocationOutputSchema,
+    GetAircraftByCallsignOutputSchema,
+} from "./schemas/outputs";
 
 /**
  * OpenSky Flight Tracker MCP Server
@@ -74,10 +83,8 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                 description: "Get aircraft details by ICAO 24-bit transponder address (hex string, e.g., '3c6444'). " +
                     "This is a direct lookup - very fast and cheap. " +
                     "Returns current position, velocity, altitude, and callsign if aircraft is currently flying.",
-                inputSchema: {
-                    icao24: z.string().length(6).regex(/^[0-9a-fA-F]{6}$/)
-                        .describe("ICAO 24-bit address (6 hex characters, e.g., '3c6444' or 'a8b2c3')"),
-                }
+                inputSchema: GetAircraftByIcaoInput,
+                outputSchema: GetAircraftByIcaoOutputSchema,
             },
             async ({ icao24 }) => {
                 const TOOL_COST = 1;
@@ -188,14 +195,8 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                     "Provide latitude, longitude, and search radius in kilometers. " +
                     "Server calculates the bounding box and queries for all aircraft in that area. " +
                     "Returns list of aircraft with position, velocity, altitude, callsign, and origin country.",
-                inputSchema: {
-                    latitude: z.number().min(-90).max(90)
-                        .describe("Center point latitude in decimal degrees (-90 to 90, e.g., 52.2297 for Warsaw)"),
-                    longitude: z.number().min(-180).max(180)
-                        .describe("Center point longitude in decimal degrees (-180 to 180, e.g., 21.0122 for Warsaw)"),
-                    radius_km: z.number().min(1).max(1000)
-                        .describe("Search radius in kilometers (1-1000, e.g., 25 for 25km radius)"),
-                }
+                inputSchema: FindAircraftNearLocationInput,
+                outputSchema: FindAircraftNearLocationOutputSchema,
             },
             async ({ latitude, longitude, radius_km }) => {
                 const TOOL_COST = 3;
@@ -348,10 +349,8 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                     "This requires a global scan of ALL currently flying aircraft (expensive operation). " +
                     "Provide the aircraft callsign (e.g., 'LOT456', 'UAL123'). " +
                     "Returns aircraft position, velocity, altitude, and origin country if found.",
-                inputSchema: {
-                    callsign: z.string().min(1).max(8).regex(/^[A-Z0-9]+$/)
-                        .describe("Aircraft callsign (1-8 alphanumeric characters, e.g., 'LOT456' or 'UAL123')"),
-                }
+                inputSchema: GetAircraftByCallsignInput,
+                outputSchema: GetAircraftByCallsignOutputSchema,
             },
             async ({ callsign }) => {
                 const TOOL_COST = 10;
