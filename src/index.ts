@@ -1,6 +1,6 @@
 import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { OpenSkyMcp } from "./server";
-import { AuthkitHandler } from "./authkit-handler";
+import { AuthkitHandler } from "./auth/authkit-handler";
 import { handleApiKeyRequest } from "./api-key-handler";
 import type { Env } from "./types";
 

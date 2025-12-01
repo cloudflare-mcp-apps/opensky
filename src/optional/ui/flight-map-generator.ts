@@ -1,4 +1,4 @@
-import { AircraftData } from '../types';
+import { AircraftData } from '../../types';
 
 /**
  * Generates a self-contained Leaflet map HTML showing aircraft positions

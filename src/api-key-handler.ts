@@ -19,18 +19,18 @@
  * 4. Add tool schemas to handleToolsList() (around line 625)
  */
 
-import { validateApiKey } from "./apiKeys";
-import { getUserById } from "./tokenUtils";
+import { validateApiKey } from "./auth/apiKeys";
+import { getUserById } from "./shared/tokenUtils";
 import type { Env, State } from "./types";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
 import { z } from "zod";
 import { createUIResource } from "@mcp-ui/server";
 import { OpenSkyClient } from "./api-client";
-import { checkBalance, consumeTokensWithRetry } from "./tokenConsumption";
-import { formatInsufficientTokensError, formatAccountDeletedError } from "./tokenUtils";
+import { checkBalance, consumeTokensWithRetry } from "./shared/tokenConsumption";
+import { formatInsufficientTokensError, formatAccountDeletedError } from "./shared/tokenUtils";
 import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
-import { generateFlightMapHTML } from "./ui/flight-map-generator";
+import { generateFlightMapHTML } from "./optional/ui/flight-map-generator";
 
 /**
  * Simple LRU (Least Recently Used) Cache for MCP Server instances

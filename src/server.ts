@@ -5,11 +5,11 @@ import { z } from "zod";
 import { createUIResource } from "@mcp-ui/server";
 import { OpenSkyClient } from "./api-client";
 import type { Env, State } from "./types";
-import type { Props } from "./props";
-import { checkBalance, consumeTokensWithRetry } from "./tokenConsumption";
-import { formatInsufficientTokensError } from "./tokenUtils";
+import type { Props } from "./auth/props";
+import { checkBalance, consumeTokensWithRetry } from "./shared/tokenConsumption";
+import { formatInsufficientTokensError } from "./shared/tokenUtils";
 import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
-import { generateFlightMapHTML } from "./ui/flight-map-generator";
+import { generateFlightMapHTML } from "./optional/ui/flight-map-generator";
 
 /**
  * OpenSky Flight Tracker MCP Server

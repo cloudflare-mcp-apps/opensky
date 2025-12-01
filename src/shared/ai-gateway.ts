@@ -10,7 +10,7 @@
  * Documentation: https://developers.cloudflare.com/ai-gateway/
  */
 
-import type { Env } from "./types";
+import type { Env } from "../types";
 
 export interface AIGatewayConfig {
   gatewayId: string;
