@@ -312,13 +312,18 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                             structuredContent: structuredResult as any
                         };
                     } else {
-                        // No aircraft found - return text message
+                        // No aircraft found - return text message with valid schema structure
                         return {
                             content: [{
                                 type: "text" as const,
                                 text: `No aircraft currently flying within ${radius_km}km of (${latitude}, ${longitude})`
                             }],
-                            structuredContent: null
+                            structuredContent: {
+                                search_center: { latitude, longitude },
+                                radius_km,
+                                aircraft_count: 0,
+                                aircraft: []
+                            }
                         };
                     }
                 } catch (error) {
