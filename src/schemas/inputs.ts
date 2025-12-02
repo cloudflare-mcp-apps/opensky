@@ -6,6 +6,8 @@
  */
 
 import { z } from "zod";
+import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
+import { COMMON_AIRCRAFT_ICAO24, ISO_COUNTRY_CODES } from "../data/completions";
 
 /**
  * Input schema for getAircraftByIcao tool
@@ -13,10 +15,18 @@ import { z } from "zod";
  * ICAO 24-bit transponder address lookup (direct, cheap operation)
  */
 export const GetAircraftByIcaoInput = {
-    icao24: z.string()
-        .length(6)
-        .regex(/^[0-9a-fA-F]{6}$/)
-        .describe("ICAO 24-bit address (6 hex characters, e.g., '3c6444' or 'a8b2c3')"),
+    icao24: completable(
+        z.string()
+            .length(6)
+            .regex(/^[0-9a-fA-F]{6}$/)
+            .describe("ICAO 24-bit address (6 hex characters, e.g., '3c6444' or 'a8b2c3')"),
+        async (value) => {
+            const valueLower = value.toLowerCase();
+            return COMMON_AIRCRAFT_ICAO24
+                .filter(item => item.icao24.toLowerCase().startsWith(valueLower))
+                .map(item => item.icao24);
+        }
+    ),
 };
 
 /**
@@ -39,4 +49,19 @@ export const FindAircraftNearLocationInput = {
         .min(1)
         .max(1000)
         .describe("Search radius in kilometers (1-1000, e.g., 25 for 25km radius)"),
+
+    origin_country: completable(
+        z.string()
+            .length(2)
+            .regex(/^[A-Z]{2}$/)
+            .optional()
+            .describe("Optional filter: ISO 3166-1 alpha-2 country code (e.g., 'US', 'DE', 'FR'). Filters results by aircraft origin country."),
+        async (value) => {
+            if (!value) return [];
+            const valueUpper = value.toUpperCase();
+            return ISO_COUNTRY_CODES
+                .filter(item => item.code.startsWith(valueUpper))
+                .map(item => item.code);
+        }
+    ),
 };

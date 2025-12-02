@@ -79,7 +79,8 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                 title: "Get Aircraft By ICAO",
                 description: "Get aircraft details by ICAO 24-bit transponder address (hex string, e.g., '3c6444'). " +
                     "This is a direct lookup - very fast and cheap. " +
-                    "Returns current position, velocity, altitude, and callsign if aircraft is currently flying.",
+                    "Returns current position, velocity, altitude, and callsign if aircraft is currently flying. " +
+                    "Type to see autocomplete suggestions for common airline aircraft.",
                 inputSchema: GetAircraftByIcaoInput,
                 outputSchema: GetAircraftByIcaoOutputSchema,
             },
@@ -191,11 +192,12 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                 description: "Find all aircraft currently flying near a geographic location. " +
                     "Provide latitude, longitude, and search radius in kilometers. " +
                     "Server calculates the bounding box and queries for all aircraft in that area. " +
-                    "Returns list of aircraft with position, velocity, altitude, callsign, and origin country.",
+                    "Returns list of aircraft with position, velocity, altitude, callsign, and origin country. " +
+                    "OPTIONAL: Filter by origin_country (ISO code with autocomplete, e.g., 'US', 'DE').",
                 inputSchema: FindAircraftNearLocationInput,
                 outputSchema: FindAircraftNearLocationOutputSchema,
             },
-            async ({ latitude, longitude, radius_km }) => {
+            async ({ latitude, longitude, radius_km, origin_country }) => {
                 const TOOL_COST = 3;
                 const TOOL_NAME = "findAircraftNearLocation";
 
@@ -230,14 +232,25 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                         radius_km
                     );
 
-                    const result = aircraftList.length > 0
+                    // Apply optional origin_country filter (client-side filtering)
+                    let filteredAircraftList = aircraftList;
+                    if (origin_country) {
+                        filteredAircraftList = aircraftList.filter(
+                            aircraft => aircraft.origin_country.toUpperCase() === origin_country.toUpperCase()
+                        );
+                        console.log(`[OpenSky] Filtered ${aircraftList.length} → ${filteredAircraftList.length} aircraft by origin_country: ${origin_country}`);
+                    }
+
+                    const result = filteredAircraftList.length > 0
                         ? JSON.stringify({
                             search_center: { latitude, longitude },
                             radius_km,
-                            aircraft_count: aircraftList.length,
-                            aircraft: aircraftList
+                            origin_country_filter: origin_country || null,
+                            aircraft_count: filteredAircraftList.length,
+                            aircraft: filteredAircraftList
                         }, null, 2)
-                        : `No aircraft currently flying within ${radius_km}km of (${latitude}, ${longitude})`;
+                        : `No aircraft currently flying within ${radius_km}km of (${latitude}, ${longitude})` +
+                          (origin_country ? ` with origin_country: ${origin_country}` : '');
 
                     // ⭐ Step 4.5: Security Processing
                     const sanitized = sanitizeOutput(result, {
@@ -281,17 +294,23 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                     );
 
                     // 6. Return result as MCP-UI resource
-                    const structuredResult = aircraftList.length > 0
-                        ? { search_center: { latitude, longitude }, radius_km, aircraft_count: aircraftList.length, aircraft: aircraftList }
+                    const structuredResult = filteredAircraftList.length > 0
+                        ? {
+                            search_center: { latitude, longitude },
+                            radius_km,
+                            origin_country_filter: origin_country || null,
+                            aircraft_count: filteredAircraftList.length,
+                            aircraft: filteredAircraftList
+                        }
                         : null;
 
                     // Generate interactive Leaflet map HTML
-                    if (aircraftList.length > 0) {
+                    if (filteredAircraftList.length > 0) {
                         const mapHTML = generateFlightMapHTML({
                             search_center: { latitude, longitude },
                             radius_km,
-                            aircraft_count: aircraftList.length,
-                            aircraft: aircraftList
+                            aircraft_count: filteredAircraftList.length,
+                            aircraft: filteredAircraftList
                         });
 
                         const uiResource = createUIResource({
@@ -303,7 +322,8 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                             encoding: 'text',
                             metadata: {
                                 title: 'Flight Map',
-                                description: `${aircraftList.length} aircraft near ${latitude}, ${longitude}`
+                                description: `${filteredAircraftList.length} aircraft near ${latitude}, ${longitude}` +
+                                    (origin_country ? ` (filtered: ${origin_country})` : '')
                             }
                         });
 
@@ -316,11 +336,13 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                         return {
                             content: [{
                                 type: "text" as const,
-                                text: `No aircraft currently flying within ${radius_km}km of (${latitude}, ${longitude})`
+                                text: `No aircraft currently flying within ${radius_km}km of (${latitude}, ${longitude})` +
+                                    (origin_country ? ` with origin_country: ${origin_country}` : '')
                             }],
                             structuredContent: {
                                 search_center: { latitude, longitude },
                                 radius_km,
+                                origin_country_filter: origin_country || null,
                                 aircraft_count: 0,
                                 aircraft: []
                             }
