@@ -334,28 +334,6 @@ async function getOrCreateServer(
     }
   );
 
-  // ========================================================================
-  // Tool 3: Get Aircraft by Callsign (10 tokens cost)
-  // ========================================================================
-  server.registerTool(
-    "getAircraftByCallsign",
-    {
-      title: "Get Aircraft By Callsign",
-      description: "Find aircraft by callsign (flight number). " +
-        "This requires a global scan of ALL currently flying aircraft (expensive operation). " +
-        "Provide the aircraft callsign (e.g., 'LOT456', 'UAL123'). " +
-        "Returns aircraft position, velocity, altitude, and origin country if found.",
-      inputSchema: {
-        callsign: z.string().min(1).max(8).regex(/^[A-Z0-9]+$/)
-          .describe("Aircraft callsign (1-8 alphanumeric characters, e.g., 'LOT456' or 'UAL123')"),
-      }
-    },
-    async ({ callsign }) => {
-      // Implementation handled in executeGetAircraftByCallsignTool()
-      return { content: [{ type: "text" as const, text: "Tool registered" }] };
-    }
-  );
-
   // Cache the server (automatic LRU eviction if cache is full)
   serverCache.set(userId, server);
 
@@ -566,27 +544,6 @@ async function handleToolsList(
         required: ["latitude", "longitude", "radius_km"],
       },
     },
-    {
-      name: "getAircraftByCallsign",
-      description:
-        "Find aircraft by callsign (flight number). " +
-        "This requires a global scan of ALL currently flying aircraft (expensive operation). " +
-        "Provide the aircraft callsign (e.g., 'LOT456', 'UAL123'). " +
-        "Returns aircraft position, velocity, altitude, and origin country if found.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          callsign: {
-            type: "string",
-            minLength: 1,
-            maxLength: 8,
-            pattern: "^[A-Z0-9]+$",
-            description: "Aircraft callsign (1-8 alphanumeric characters, e.g., 'LOT456' or 'UAL123')",
-          },
-        },
-        required: ["callsign"],
-      },
-    },
   ];
 
   return jsonRpcResponse(request.id, {
@@ -640,10 +597,6 @@ async function handleToolsCall(
 
       case "findAircraftNearLocation":
         result = await executeFindAircraftNearLocationTool(toolArgs, env, userId);
-        break;
-
-      case "getAircraftByCallsign":
-        result = await executeGetAircraftByCallsignTool(toolArgs, env, userId);
         break;
 
       default:
@@ -904,101 +857,6 @@ async function executeFindAircraftNearLocationTool(
       ]
     };
   }
-}
-
-/**
- * Execute getAircraftByCallsign tool (10 tokens)
- */
-async function executeGetAircraftByCallsignTool(
-  args: Record<string, any>,
-  env: Env,
-  userId: string
-): Promise<any> {
-  const TOOL_COST = 10;
-  const TOOL_NAME = "getAircraftByCallsign";
-  const actionId = crypto.randomUUID();
-
-  const balanceCheck = await checkBalance(env.TOKEN_DB, userId, TOOL_COST);
-
-  if (balanceCheck.userDeleted) {
-    return {
-      content: [{ type: "text" as const, text: formatAccountDeletedError(TOOL_NAME) }],
-      isError: true,
-    };
-  }
-
-  if (!balanceCheck.sufficient) {
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: formatInsufficientTokensError(TOOL_NAME, balanceCheck.currentBalance, TOOL_COST),
-        },
-      ],
-      isError: true,
-    };
-  }
-
-  // Initialize OpenSky client
-  const localState: State = {
-    opensky_access_token: null,
-    opensky_token_expires_at: null,
-  };
-  const setLocalState = async (newState: Partial<State>) => {
-    Object.assign(localState, newState);
-  };
-  const openskyClient = new OpenSkyClient(env, localState, setLocalState);
-
-  // Execute tool logic
-  const aircraft = await openskyClient.getAircraftByCallsign(args.callsign);
-
-  const result = aircraft
-    ? JSON.stringify(aircraft, null, 2)
-    : `No aircraft found with callsign: ${args.callsign} (aircraft may not be currently flying)`;
-
-  // ⭐ Step 4.5: Security Processing
-  const sanitized = sanitizeOutput(result, {
-    removeHtml: true,
-    removeControlChars: true,
-    normalizeWhitespace: true,
-    maxLength: 5000
-  });
-
-  const { redacted, detectedPII } = redactPII(sanitized, {
-    redactEmails: false,
-    redactPhones: true,
-    redactCreditCards: true,
-    redactSSN: true,
-    redactBankAccounts: true,
-    redactPESEL: true,
-    redactPolishIdCard: true,
-    redactPolishPassport: true,
-    redactPolishPhones: true,
-    placeholder: '[REDACTED]'
-  });
-
-  if (detectedPII.length > 0) {
-    console.warn(`[Security] Tool ${TOOL_NAME}: Redacted PII types:`, detectedPII);
-  }
-
-  const finalResult = redacted;
-  // ⭐ End of Step 4.5
-
-  await consumeTokensWithRetry(
-    env.TOKEN_DB,
-    userId,
-    TOOL_COST,
-    "opensky",
-    TOOL_NAME,
-    args,
-    finalResult,
-    true,
-    actionId
-  );
-
-  return {
-    content: [{ type: "text" as const, text: finalResult }],
-  };
 }
 
 /**

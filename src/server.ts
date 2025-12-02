@@ -12,12 +12,10 @@ import { generateFlightMapHTML } from "./optional/ui/flight-map-generator";
 import {
     GetAircraftByIcaoInput,
     FindAircraftNearLocationInput,
-    GetAircraftByCallsignInput,
 } from "./schemas/inputs";
 import {
     GetAircraftByIcaoOutputSchema,
     FindAircraftNearLocationOutputSchema,
-    GetAircraftByCallsignOutputSchema,
 } from "./schemas/outputs";
 
 /**
@@ -43,7 +41,6 @@ import {
  * Tools:
  * - findAircraftNearLocation (3 tokens): Geographic search with bounding box
  * - getAircraftByIcao (1 token): Direct lookup by ICAO24 transponder address
- * - getAircraftByCallsign (10 tokens): Global scan + server-side filtering
  */
 export class OpenSkyMcp extends McpAgent<Env, State, Props> {
     server = new McpServer({
@@ -324,118 +321,6 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                             structuredContent: null
                         };
                     }
-                } catch (error) {
-                    return {
-                        content: [{
-                            type: "text" as const,
-                            text: `Error: ${error instanceof Error ? error.message : String(error)}`
-                        }],
-                        isError: true
-                    };
-                }
-            }
-        );
-
-        // ========================================================================
-        // Tool 3: Get Aircraft by Callsign (10 tokens cost)
-        // ========================================================================
-        // Global scan + server-side filtering - EXPENSIVE
-        // Requires 4 OpenSky API credits + heavy computation
-        this.server.registerTool(
-            "getAircraftByCallsign",
-            {
-                title: "Get Aircraft By Callsign",
-                description: "Find aircraft by callsign (flight number). " +
-                    "This requires a global scan of ALL currently flying aircraft (expensive operation). " +
-                    "Provide the aircraft callsign (e.g., 'LOT456', 'UAL123'). " +
-                    "Returns aircraft position, velocity, altitude, and origin country if found.",
-                inputSchema: GetAircraftByCallsignInput,
-                outputSchema: GetAircraftByCallsignOutputSchema,
-            },
-            async ({ callsign }) => {
-                const TOOL_COST = 10;
-                const TOOL_NAME = "getAircraftByCallsign";
-
-                // 0. Pre-generate action_id for idempotency
-                const actionId = crypto.randomUUID();
-
-                try {
-                    // 1. Get user ID
-                    const userId = this.props?.userId;
-                    if (!userId) {
-                        throw new Error("User ID not found in authentication context");
-                    }
-
-                    // 2. Check token balance
-                    const balanceCheck = await checkBalance(this.env.TOKEN_DB, userId, TOOL_COST);
-
-                    // 3. Handle insufficient balance
-                    if (!balanceCheck.sufficient) {
-                        return {
-                            content: [{
-                                type: "text" as const,
-                                text: formatInsufficientTokensError(TOOL_NAME, balanceCheck.currentBalance, TOOL_COST)
-                            }],
-                            isError: true
-                        };
-                    }
-
-                    // 4. Execute tool logic
-                    const aircraft = await openskyClient.getAircraftByCallsign(callsign);
-
-                    const result = aircraft
-                        ? JSON.stringify(aircraft, null, 2)
-                        : `No aircraft found with callsign: ${callsign} (aircraft may not be currently flying)`;
-
-                    // ⭐ Step 4.5: Security Processing
-                    const sanitized = sanitizeOutput(result, {
-                        removeHtml: true,
-                        removeControlChars: true,
-                        normalizeWhitespace: true,
-                        maxLength: 5000
-                    });
-
-                    const { redacted, detectedPII } = redactPII(sanitized, {
-                        redactEmails: false,
-                        redactPhones: true,
-                        redactCreditCards: true,
-                        redactSSN: true,
-                        redactBankAccounts: true,
-                        redactPESEL: true,
-                        redactPolishIdCard: true,
-                        redactPolishPassport: true,
-                        redactPolishPhones: true,
-                        placeholder: '[REDACTED]'
-                    });
-
-                    if (detectedPII.length > 0) {
-                        console.warn(`[Security] Tool ${TOOL_NAME}: Redacted PII types:`, detectedPII);
-                    }
-
-                    const finalResult = redacted;
-                    // ⭐ End of Step 4.5
-
-                    // 5. Consume tokens
-                    await consumeTokensWithRetry(
-                        this.env.TOKEN_DB,
-                        userId,
-                        TOOL_COST,
-                        "opensky",
-                        TOOL_NAME,
-                        { callsign },
-                        finalResult,
-                        true,
-                        actionId
-                    );
-
-                    // 6. Return result
-                    return {
-                        content: [{
-                            type: "text" as const,
-                            text: finalResult
-                        }],
-                        structuredContent: aircraft as any
-                    };
                 } catch (error) {
                     return {
                         content: [{

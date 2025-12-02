@@ -40,16 +40,3 @@ export const FindAircraftNearLocationInput = {
         .max(1000)
         .describe("Search radius in kilometers (1-1000, e.g., 25 for 25km radius)"),
 };
-
-/**
- * Input schema for getAircraftByCallsign tool
- *
- * Global scan + server-side filtering (expensive operation)
- */
-export const GetAircraftByCallsignInput = {
-    callsign: z.string()
-        .min(1)
-        .max(8)
-        .regex(/^[A-Z0-9]+$/)
-        .describe("Aircraft callsign (1-8 alphanumeric characters, e.g., 'LOT456' or 'UAL123')"),
-};

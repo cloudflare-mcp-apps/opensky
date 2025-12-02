@@ -79,10 +79,3 @@ export const FindAircraftNearLocationOutputSchema = z.object({
     aircraft: z.array(AircraftDataSchema)
         .describe("List of aircraft currently flying in area"),
 });
-
-/**
- * Output schema for getAircraftByCallsign tool
- *
- * Returns single aircraft or null if not found/flying
- */
-export const GetAircraftByCallsignOutputSchema = AircraftDataSchema.nullable();

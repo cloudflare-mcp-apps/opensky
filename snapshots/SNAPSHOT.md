@@ -35,7 +35,7 @@
 ## 2.1 SDK 1.20+ Features
 
 ### registerTool() API
-- **Status**: Fully implemented in all 3 tools
+- **Status**: Fully implemented in all 2 tools
 - **Coverage**: Both OAuth path (server.ts) and API key path (api-key-handler.ts)
 - **Benefits**: Cleaner syntax with separate title and description fields, better LLM integration
 
@@ -54,7 +54,7 @@
 
 ### Tool Registry
 
-**Total Tools**: 3
+**Total Tools**: 2
 
 #### Tool 1: getAircraftByIcao
 
@@ -154,38 +154,6 @@
 
 ---
 
-#### Tool 3: getAircraftByCallsign
-
-**Technical Name**: `getAircraftByCallsign`
-
-**Description (Verbatim)**:
-> "Find aircraft by callsign (flight number). This requires a global scan of ALL currently flying aircraft (expensive operation). Provide the aircraft callsign (e.g., 'LOT456', 'UAL123'). Returns aircraft position, velocity, altitude, and origin country if found. ⚠️ This tool costs 10 tokens per use (global scan is expensive)."
-
-**Token Cost**: 10 tokens per use (unconditional flat cost)
-
-**Input Schema**:
-- `callsign` (string, required): Aircraft callsign (1-8 alphanumeric characters, e.g., 'LOT456' or 'UAL123')
-
-**Dual Auth Parity**: ⚠️ OAuth path only (API key path not implemented)
-- OAuth Path: src/server.ts:297-405
-- API Key Path: Not implemented (skeleton only)
-
-**Implementation Details**:
-- External API: OpenSky Network REST API (global scan, no filters)
-- Query Type: Global state retrieval + server-side filtering
-- API Credit Cost: 4 OpenSky credits (most expensive operation)
-- Pricing Model: Flat cost (10 tokens always, reflects high API cost)
-- Server-Side Filtering: Callsign matching in Workers runtime (not API-supported)
-- Max Output Length: 5000 characters (post-sanitization)
-
-**Why So Expensive**: OpenSky API doesn't support direct callsign queries. Must fetch ALL flying aircraft (~10,000-20,000 records) and filter locally. This is the most expensive operation available.
-
-**Output Format**: Same as getAircraftByIcao (single aircraft object or null)
-
-**MCP Prompt Descriptions**: Not implemented (no custom prompts defined)
-
----
-
 ## 4. Security and Compliance
 
 ### Vendor Hiding
@@ -213,7 +181,7 @@ redactPolishPhones: true  // Polish phone numbers
 
 **Rationale**: OpenSky API responses contain aviation technical data (coordinates, callsigns, transponder codes) - extremely low PII risk. Security layer primarily protects against edge cases where user input might accidentally include sensitive data.
 
-**Security Processing**: Implemented at Step 4.5 in OAuth path (all 3 tools)
+**Security Processing**: Implemented at Step 4.5 in OAuth path (all 2 tools)
 - `sanitizeOutput()`: HTML removal, control character stripping, whitespace normalization
 - `redactPII()`: Pattern-based PII detection with Polish market support
 - Security logging: Console warnings when PII patterns detected
@@ -338,7 +306,6 @@ redactPolishPhones: true  // Polish phone numbers
 |------|------------|-----------------|-----------|
 | getAircraftByIcao | 1 token | 1 credit | Direct lookup (cheapest operation) |
 | findAircraftNearLocation | 3 tokens | 1-3 credits | Geographic query (medium cost) |
-| getAircraftByCallsign | 10 tokens | 4 credits | Global scan + filtering (expensive) |
 
 **Why No Caching**:
 - Aircraft data changes every 10-15 seconds (real-time tracking)
@@ -372,7 +339,7 @@ return {
 ### SDK 1.20+ Implementation
 
 **registerTool() API Migration**:
-- All 3 tools migrated from deprecated `server.tool()` to new `registerTool()` API
+- All 2 tools migrated from deprecated `server.tool()` to new `registerTool()` API
 - Both OAuth (server.ts) and API key (api-key-handler.ts) paths have feature parity
 - Cleaner syntax with separate `title` and `description` fields
 - Better LLM integration and prompt understanding
@@ -392,7 +359,7 @@ return {
 
 **PII Redaction**:
 - All tool outputs pass through pilpat-mcp-security v1.1.0
-- Step 4.5 security processing in all 6 tool paths (3 OAuth + 3 API key)
+- Step 4.5 security processing in all 4 tool paths (2 OAuth + 2 API key)
 - Redacts: credit cards, SSN, bank accounts, phones, Polish ID patterns
 - Email redaction disabled by default
 - Security events logged with detected PII types
@@ -542,18 +509,6 @@ Unlike most MCP servers with single authentication layer, OpenSky implements **t
 }
 ```
 
-### Expensive Tool as Warning Pattern
-
-**getAircraftByCallsign (10 tokens)** serves as an economic disincentive:
-
-**Design Philosophy**:
-1. **API Limitation**: OpenSky doesn't support callsign queries
-2. **Workaround Cost**: Global scan is 4x more expensive than ICAO lookup
-3. **Price Signal**: 10 tokens (vs 1 for ICAO) guides users toward efficient patterns
-4. **Clear Communication**: Description explicitly warns "expensive operation"
-
-**Result**: Users learn to prefer ICAO24 lookups when possible, reducing API costs for everyone.
-
 ### LLM-Optimized Data Transformation
 
 **Three-Stage Pipeline** (src/api-client.ts:163-214):
@@ -604,9 +559,8 @@ Unlike most MCP servers with single authentication layer, OpenSky implements **t
 ✅ **API Authentication**: OpenSky OAuth2 client credentials with auto-refresh
 ✅ **Tool 1 (getAircraftByIcao)**: Direct ICAO24 lookup (1 token)
 ✅ **Tool 2 (findAircraftNearLocation)**: Geographic bounding box search (3 tokens)
-✅ **Tool 3 (getAircraftByCallsign)**: Global scan with server-side filtering (10 tokens)
-✅ **Security Processing**: Step 4.5 with pilpat-mcp-security v1.1.0 (all 3 tools)
-✅ **Input Validation**: Zod schemas with regex patterns (ICAO24, callsign)
+✅ **Security Processing**: Step 4.5 with pilpat-mcp-security v1.1.0 (all 2 tools)
+✅ **Input Validation**: Zod schemas with regex patterns (ICAO24)
 ✅ **Stateful Token Management**: Durable Object state for OAuth2 token lifecycle
 ✅ **Geographic Calculations**: Bounding box algorithm for radius queries
 
@@ -614,7 +568,7 @@ Unlike most MCP servers with single authentication layer, OpenSky implements **t
 
 ⚠️ **API Key Authentication Path**: AnythingLLM compatibility
 - src/api-key-handler.ts exists but not implemented
-- Requires tool registration + executor functions (5 locations per tool × 3 tools)
+- Requires tool registration + executor functions (5 locations per tool × 2 tools)
 - State management complexity: How to handle OpenSky token in API key path?
 
 ⚠️ **KV Caching Consideration**:
@@ -635,10 +589,10 @@ Unlike most MCP servers with single authentication layer, OpenSky implements **t
 
 ⚠️ **Post-Deployment Testing**:
 - Test OAuth flow completion
-- Test all 3 tools with real aircraft data
+- Test all 2 tools with real aircraft data
 - Verify OpenSky token auto-refresh behavior (wait 30 minutes)
 - Check token consumption accuracy
-- Test invalid inputs (bad ICAO24, bad callsign, invalid coordinates)
+- Test invalid inputs (bad ICAO24, invalid coordinates)
 
 ---
 
@@ -663,18 +617,6 @@ Unlike most MCP servers with single authentication layer, OpenSky implements **t
 - Medium LLM context value (regional snapshot)
 
 **Use Case**: "Show me flights near Warsaw airport", "What's flying over Berlin right now?"
-
-### getAircraftByCallsign (10 tokens)
-
-**Cost Breakdown**:
-- Global scan of ALL aircraft (4 OpenSky credits)
-- Server-side filtering (CPU cost)
-- Response size same as getAircraftByIcao (~500 bytes)
-- Low LLM context value BUT high infrastructure cost
-
-**Use Case**: "Where is LOT456 right now?" (when ICAO24 unknown)
-
-**Economic Signal**: High price discourages usage, guides users toward ICAO24 lookups
 
 ---
 
@@ -728,13 +670,6 @@ Unlike most MCP servers with single authentication layer, OpenSky implements **t
 ---
 
 ## 15. Known Limitations & Design Decisions
-
-### No Callsign Index
-
-**Problem**: OpenSky API doesn't support direct callsign queries
-**Workaround**: Global scan + server-side filtering
-**Cost Impact**: 10 tokens (vs 1 for ICAO24)
-**Alternative Considered**: Build local callsign→ICAO24 cache (rejected due to maintenance complexity)
 
 ### Flat-Earth Approximation
 

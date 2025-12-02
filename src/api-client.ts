@@ -341,42 +341,4 @@ export class OpenSkyClient {
         return aircraftData[0] || null;
     }
 
-    /**
-     * Get aircraft by callsign
-     *
-     * Requires global scan (4 OpenSky credits) + server-side filtering.
-     * This is expensive but necessary since OpenSky API doesn't support
-     * direct callsign filtering.
-     *
-     * @param callsign - Aircraft callsign (e.g., "LOT456")
-     * @returns Aircraft data if found, null otherwise
-     */
-    async getAircraftByCallsign(callsign: string): Promise<AircraftData | null> {
-        // Validate callsign (alphanumeric, max 8 chars)
-        const callsignUpper = callsign.toUpperCase().trim();
-        if (!/^[A-Z0-9]{1,8}$/.test(callsignUpper)) {
-            throw new Error(`Invalid callsign format: ${callsign} (must be 1-8 alphanumeric characters)`);
-        }
-
-        console.log("[OpenSky] Searching for callsign:", callsignUpper, "(global scan)");
-
-        // Global scan (no filters)
-        const response = await this.getAllStates();
-
-        if (!response.states || response.states.length === 0) {
-            return null;
-        }
-
-        const parsed = this.parseStateVectors(response.states);
-
-        // Filter by callsign (server-side)
-        const match = parsed.find((v) => v.callsign === callsignUpper);
-
-        if (!match) {
-            return null;
-        }
-
-        const aircraftData = this.toAircraftData([match]);
-        return aircraftData[0];
-    }
 }

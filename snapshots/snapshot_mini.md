@@ -12,7 +12,7 @@
 - **AI Gateway Status**: Configured (environment variable) but not actively used
 - **Gateway ID**: mcp-production-gateway (shared across all MCP servers)
 
-- **Total Tools**: 3
+- **Total Tools**: 2
 
   - Tool 1: getAircraftByIcao
     - **Description (Verbatim)**: "Get aircraft details by ICAO 24-bit transponder address (hex string, e.g., '3c6444'). This is a direct lookup - very fast and cheap. Returns current position, velocity, altitude, and callsign if aircraft is currently flying. ⚠️ This tool costs 1 token per use."
@@ -31,15 +31,6 @@
       - `longitude` (number, required): Center point longitude (-180 to 180)
       - `radius_km` (number, required): Search radius in kilometers (1-1000)
     - **Output Format**: JSON with search_center, radius_km, aircraft_count, aircraft array
-    - Max Output Length: 5000 characters (post-sanitization)
-    - **MCP Prompt Descriptions**: Not implemented
-
-  - Tool 3: getAircraftByCallsign
-    - **Description (Verbatim)**: "Find aircraft by callsign (flight number). This requires a global scan of ALL currently flying aircraft (expensive operation). Provide the aircraft callsign (e.g., 'LOT456', 'UAL123'). Returns aircraft position, velocity, altitude, and origin country if found. ⚠️ This tool costs 10 tokens per use (global scan is expensive)."
-    - **Token Cost**: 10 tokens per use (unconditional flat cost)
-    - **Input Schema**:
-      - `callsign` (string, required): Aircraft callsign (1-8 alphanumeric characters)
-    - **Output Format**: Same as getAircraftByIcao (single aircraft object or null)
     - Max Output Length: 5000 characters (post-sanitization)
     - **MCP Prompt Descriptions**: Not implemented
 
@@ -71,13 +62,12 @@ Note: The server name ("opensky") is a local identifier - change it to whatever 
 
 **Architecture Notes**:
 - **SDK 1.20+ Features**: registerTool() API for cleaner tool registration, structuredContent field for LLM optimization
-  - All 3 tools use registerTool() API (both OAuth and API key paths)
+  - All 2 tools use registerTool() API (both OAuth and API key paths)
   - structuredContent enables direct JSON access for Claude and other LLM clients
 - Dual-layer authentication: WorkOS (user auth) + OpenSky OAuth2 client credentials (API auth)
 - Stateful Durable Object: Stores OpenSky access_token with 30-minute expiry and 5-minute auto-refresh buffer
-- Expensive tool as warning pattern: getAircraftByCallsign (10 tokens) discourages global scans
 - LLM-optimized data transformation: 3-stage pipeline (raw → parsed → semantic grouping)
 - Geographic calculations: Flat-Earth bounding box approximation (accurate for < 100km radius)
 - External API: OpenSky Network REST API (OAuth2 client credentials)
 - Dual authentication: OAuth (server.ts) + API key (api-key-handler.ts) both fully implemented with registerTool() parity
-- Security: Step 4.5 implemented in all 6 tool paths (3 OAuth + 3 API key), DNS rebinding protection added to API key path
+- Security: Step 4.5 implemented in all 4 tool paths (2 OAuth + 2 API key), DNS rebinding protection added to API key path
