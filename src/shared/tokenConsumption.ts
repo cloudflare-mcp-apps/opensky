@@ -10,6 +10,7 @@
 // CRITICAL PRINCIPLE: Always query database for current balance. Never cache.
 
 import type { D1Database } from '@cloudflare/workers-types';
+import { logger } from './logger';
 
 /**
  * Result of checking user's token balance
@@ -59,7 +60,12 @@ export async function checkBalance(
       .first<{ current_token_balance: number; is_deleted: number }>();
 
     if (!result) {
-      console.error(`[Token Consumption] User not found: ${userId}`);
+      logger.error({
+        event: 'user_lookup',
+        lookup_by: 'id',
+        user_id: userId,
+        found: false,
+      });
       return {
         sufficient: false,
         currentBalance: 0,
@@ -69,7 +75,14 @@ export async function checkBalance(
 
     // Check if user account is deleted
     if (result.is_deleted === 1) {
-      console.error(`[Token Consumption] User account is deleted: ${userId}`);
+      logger.error({
+        event: 'user_lookup',
+        lookup_by: 'id',
+        user_id: userId,
+        found: true,
+        is_deleted: true,
+        balance: result.current_token_balance,
+      });
       return {
         sufficient: false,
         currentBalance: result.current_token_balance,
@@ -81,9 +94,13 @@ export async function checkBalance(
     const currentBalance = result.current_token_balance;
     const sufficient = currentBalance >= requiredTokens;
 
-    console.log(
-      `[Token Consumption] Balance check for user ${userId}: ${currentBalance} tokens, needs ${requiredTokens}, sufficient: ${sufficient}`
-    );
+    logger.info({
+      event: 'balance_check',
+      user_id: userId,
+      required_tokens: requiredTokens,
+      current_balance: currentBalance,
+      sufficient,
+    });
 
     return {
       sufficient,
@@ -92,7 +109,13 @@ export async function checkBalance(
       userDeleted: false,
     };
   } catch (error) {
-    console.error('[Token Consumption] Error checking balance:', error);
+    logger.error({
+      event: 'balance_check',
+      user_id: userId,
+      required_tokens: requiredTokens,
+      current_balance: 0,
+      sufficient: false,
+    });
     throw new Error('Failed to check token balance');
   }
 }
@@ -140,11 +163,16 @@ export async function consumeTokens(
     const existingAction = await db
       .prepare('SELECT action_id, tokens_consumed, created_at FROM mcp_actions WHERE action_id = ?')
       .bind(finalActionId)
-      .first();
+      .first<{ action_id: string; tokens_consumed: number; created_at: string }>();
 
     if (existingAction) {
-      console.log(`✋ [Token Consumption] Action already processed: ${finalActionId}`);
-      console.log(`   Original execution: ${existingAction.created_at}`);
+      logger.info({
+        event: 'idempotency_skip',
+        action_id: finalActionId,
+        user_id: userId,
+        tool: toolName,
+        original_timestamp: existingAction.created_at,
+      });
 
       // Get current balance
       const balanceResult = await db
@@ -179,10 +207,6 @@ export async function consumeTokens(
       params: actionParams,
       result: actionResult,
     });
-
-    console.log(
-      `[Token Consumption] Consuming ${tokenAmount} tokens for user ${userId}, server: ${mcpServerName}, tool: ${toolName}`
-    );
 
     // ============================================================
     // ATOMIC TRANSACTION: All three operations must succeed together
@@ -267,9 +291,15 @@ export async function consumeTokens(
 
     const newBalance = balanceResult.current_token_balance;
 
-    console.log(
-      `[Token Consumption] ✅ Success! User ${userId}: ${newBalance + tokenAmount} → ${newBalance} tokens`
-    );
+    logger.info({
+      event: 'token_consumed',
+      user_id: userId,
+      tokens: tokenAmount,
+      balance_after: newBalance,
+      tool: toolName,
+      action_id: finalActionId,
+      success: true,
+    });
 
     return {
       success: true,
@@ -283,7 +313,13 @@ export async function consumeTokens(
     // HANDLE UNIQUE CONSTRAINT VIOLATION (Race Condition Detected)
     // ============================================================
     if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
-      console.log(`⚠️ [Token Consumption] Race detected - action already processed in parallel request`);
+      logger.warn({
+        event: 'idempotency_skip',
+        action_id: actionId ?? 'unknown',
+        user_id: userId,
+        tool: toolName,
+        original_timestamp: new Date().toISOString(),
+      });
 
       // Recursive call to fetch existing action details
       // This ensures idempotent response even in race conditions
@@ -294,13 +330,12 @@ export async function consumeTokens(
     }
 
     // Other errors - log and re-throw for retry wrapper
-    console.error('[Token Consumption] ❌ Error consuming tokens:', error);
-    console.error({
-      userId,
-      tokenAmount,
-      mcpServerName,
-      toolName,
-      actionParams,
+    logger.error({
+      event: 'token_consumption_failed',
+      user_id: userId,
+      tokens: tokenAmount,
+      tool: toolName,
+      action_id: actionId ?? 'unknown',
       error: error instanceof Error ? error.message : String(error),
     });
 
@@ -351,18 +386,43 @@ export async function consumeTokensWithRetry(
       );
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      console.error(`[Token Consumption] Attempt ${attempt}/${maxRetries} failed:`, lastError);
+
+      logger.error({
+        event: 'token_consumption_failed',
+        user_id: userId,
+        tokens: tokenAmount,
+        tool: toolName,
+        action_id: actionId,
+        error: lastError.message,
+        attempt,
+      });
 
       if (attempt < maxRetries) {
         // Exponential backoff: 100ms, 200ms, 400ms...
         const delay = 100 * Math.pow(2, attempt - 1);
-        console.log(`[Token Consumption] Retrying in ${delay}ms...`);
+        logger.info({
+          event: 'token_consumed',
+          user_id: userId,
+          tokens: 0,
+          balance_after: 0,
+          tool: toolName,
+          action_id: actionId,
+          success: false,
+        });
         await new Promise(resolve => setTimeout(resolve, delay));
       } else {
         // ============================================================
         // ALL RETRIES EXHAUSTED - Log to failed_deductions table
         // ============================================================
-        console.error(`[Token Consumption] CRITICAL: All ${maxRetries} attempts failed for action ${actionId}`);
+        logger.critical({
+          event: 'token_consumption_failed',
+          user_id: userId,
+          tokens: tokenAmount,
+          tool: toolName,
+          action_id: actionId,
+          error: lastError.message,
+          attempt: maxRetries,
+        });
 
         try {
           await db.prepare(`
@@ -382,9 +442,23 @@ export async function consumeTokensWithRetry(
             maxRetries
           ).run();
 
-          console.log(`📝 [Token Consumption] Logged to failed_deductions for reconciliation`);
+          logger.info({
+            event: 'failed_deduction_logged',
+            user_id: userId,
+            tool: toolName,
+            action_id: actionId,
+            tokens: tokenAmount,
+            error: lastError.message,
+          });
         } catch (logError) {
-          console.error('[Token Consumption] Failed to log failed deduction:', logError);
+          logger.error({
+            event: 'failed_deduction_logged',
+            user_id: userId,
+            tool: toolName,
+            action_id: actionId,
+            tokens: tokenAmount,
+            error: logError instanceof Error ? logError.message : String(logError),
+          });
         }
 
         throw lastError;
@@ -471,7 +545,12 @@ export async function getUserStats(
       actionsPerformed: actionsResult?.count || 0,
     };
   } catch (error) {
-    console.error('[Token Consumption] Error getting user stats:', error);
+    logger.error({
+      event: 'user_lookup',
+      lookup_by: 'id',
+      user_id: userId,
+      found: false,
+    });
     return null;
   }
 }

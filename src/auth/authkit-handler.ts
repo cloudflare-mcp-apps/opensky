@@ -5,6 +5,7 @@ import { type AccessToken, type AuthenticationResponse, WorkOS } from "@workos-i
 import type { Env } from "../types";
 import type { Props } from "./props";
 import { getUserByEmail, formatPurchaseRequiredPage, formatAccountDeletedPage, formatOAuthSuccessPage } from "../shared/tokenUtils";
+import { logger } from '../shared/logger';
 
 /**
  * Authentication handler for WorkOS AuthKit integration
@@ -86,7 +87,7 @@ app.get("/authorize", async (c) => {
     // STEP 2: If no session, redirect to centralized custom login
     // ============================================================
     if (!sessionToken && c.env.USER_SESSIONS) {
-        console.log('🔐 [OAuth] No session found, redirecting to centralized custom login');
+        logger.info({ event: 'session_check', session_id: '', valid: false, reason: 'not_found' });
         const loginUrl = new URL('https://panel.wtyczki.ai/auth/login-custom');
         loginUrl.searchParams.set('return_to', c.req.url);
         return Response.redirect(loginUrl.toString(), 302);
@@ -102,7 +103,7 @@ app.get("/authorize", async (c) => {
         );
 
         if (!sessionData) {
-            console.log('🔐 [OAuth] Invalid session, redirecting to centralized custom login');
+            logger.info({ event: 'session_check', session_id: sessionToken, valid: false, reason: 'invalid' });
             const loginUrl = new URL('https://panel.wtyczki.ai/auth/login-custom');
             loginUrl.searchParams.set('return_to', c.req.url);
             return Response.redirect(loginUrl.toString(), 302);
@@ -116,7 +117,7 @@ app.get("/authorize", async (c) => {
 
         // Check expiration
         if (session.expires_at < Date.now()) {
-            console.log('🔐 [OAuth] Session expired, redirecting to centralized custom login');
+            logger.info({ event: 'session_check', session_id: sessionToken, valid: false, reason: 'expired' });
             const loginUrl = new URL('https://panel.wtyczki.ai/auth/login-custom');
             loginUrl.searchParams.set('return_to', c.req.url);
             return Response.redirect(loginUrl.toString(), 302);
@@ -125,18 +126,18 @@ app.get("/authorize", async (c) => {
         // ============================================================
         // STEP 4: Session valid - load user from database
         // ============================================================
-        console.log(`✅ [OAuth] Valid session found for user: ${session.email}`);
+        logger.info({ event: 'auth_attempt', method: 'oauth', user_email: session.email, success: true });
 
         // CRITICAL: Query database for current user data (balance, deletion status)
         const dbUser = await getUserByEmail(c.env.TOKEN_DB, session.email);
 
         if (!dbUser) {
-            console.log(`❌ [OAuth] User not found in database: ${session.email}`);
+            logger.warn({ event: 'auth_attempt', method: 'oauth', user_email: session.email, success: false, reason: 'not_in_db' });
             return c.html(formatPurchaseRequiredPage(session.email), 403);
         }
 
         if (dbUser.is_deleted === 1) {
-            console.log(`❌ [OAuth] Account deleted: ${session.email}`);
+            logger.warn({ event: 'auth_attempt', method: 'oauth', user_email: session.email, success: false, reason: 'deleted' });
             return c.html(formatAccountDeletedPage(), 403);
         }
 
@@ -179,14 +180,14 @@ app.get("/authorize", async (c) => {
         });
 
         // Show success page with auto-redirect (provides user feedback)
-        console.log(`✅ [OAuth] Authorization complete for: ${session.email}, redirecting to MCP client`);
+        logger.info({ event: 'auth_attempt', method: 'oauth', user_email: session.email, user_id: dbUser.user_id, success: true });
         return c.html(formatOAuthSuccessPage(session.email, redirectTo), 200);
     }
 
     // ============================================================
     // STEP 6: Fallback to WorkOS (if USER_SESSIONS not configured)
     // ============================================================
-    console.log('⚠️ [OAuth] No session handling - falling back to WorkOS');
+    logger.info({ event: 'auth_attempt', method: 'oauth', success: false, reason: 'no_session_kv' });
     return Response.redirect(
         c.get("workOS").userManagement.getAuthorizationUrl({
             provider: "authkit",
@@ -228,7 +229,7 @@ app.get("/callback", async (c) => {
             code,
         });
     } catch (error) {
-        console.error("[MCP OAuth] Authentication error:", error);
+        logger.error({ event: 'auth_attempt', method: 'oauth', success: false, reason: 'auth_error' });
         return c.text("Invalid authorization code", 400);
     }
 
@@ -239,23 +240,23 @@ app.get("/callback", async (c) => {
     const { permissions = [] } = jose.decodeJwt<AccessToken>(accessToken);
 
     // CRITICAL: Check if user exists in token database
-    console.log(`[MCP OAuth] Checking if user exists in database: ${user.email}`);
+    // User lookup logged by getUserByEmail in tokenUtils.ts
     const dbUser = await getUserByEmail(c.env.TOKEN_DB, user.email);
 
     // If user not found in database, reject authorization and show purchase page
     if (!dbUser) {
-        console.log(`[MCP OAuth] ❌ User not found in database: ${user.email} - Tokens required`);
+        logger.warn({ event: 'auth_attempt', method: 'oauth', user_email: user.email, success: false, reason: 'not_in_db' });
         return c.html(formatPurchaseRequiredPage(user.email), 403);
     }
 
     // SECURITY FIX: Defensive check for deleted accounts (belt-and-suspenders approach)
     // This provides defense-in-depth even if getUserByEmail() query is modified
     if (dbUser.is_deleted === 1) {
-        console.log(`[MCP OAuth] ❌ Account deleted: ${user.email} (user_id: ${dbUser.user_id})`);
+        logger.warn({ event: 'auth_attempt', method: 'oauth', user_email: user.email, user_id: dbUser.user_id, success: false, reason: 'deleted' });
         return c.html(formatAccountDeletedPage(), 403);
     }
 
-    console.log(`[MCP OAuth] ✅ User found in database: ${dbUser.user_id}, balance: ${dbUser.current_token_balance} tokens`);
+    // User found - logged by getUserByEmail in tokenUtils.ts
 
     // Complete OAuth flow and get redirect URL back to MCP client
     const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
@@ -281,7 +282,7 @@ app.get("/callback", async (c) => {
     });
 
     // Show success page with auto-redirect (provides user feedback)
-    console.log(`✅ [OAuth Callback] Authorization complete for: ${user.email}, redirecting to MCP client`);
+    logger.info({ event: 'auth_attempt', method: 'oauth', user_email: user.email, user_id: dbUser.user_id, success: true });
     return c.html(formatOAuthSuccessPage(user.email, redirectTo), 200);
 });
 

@@ -23,7 +23,6 @@ import { validateApiKey } from "./auth/apiKeys";
 import { getUserById } from "./shared/tokenUtils";
 import type { Env, State } from "./types";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
 import { z } from "zod";
 import { createUIResource } from "@mcp-ui/server";
 import { OpenSkyClient } from "./api-client";

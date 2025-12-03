@@ -15,6 +15,7 @@ import type {
     OpenSkyStateVector,
     AircraftData,
 } from "./types";
+import { logger, startTimer } from './shared/logger';
 
 /**
  * OpenSky API Client
@@ -67,12 +68,21 @@ export class OpenSkyClient {
             this.state.opensky_token_expires_at &&
             this.state.opensky_token_expires_at > now + BUFFER_MS
         ) {
-            console.log("[OpenSky] Using cached token (valid for", Math.floor((this.state.opensky_token_expires_at - now) / 1000), "more seconds)");
+            logger.debug({
+                event: 'cache_operation',
+                operation: 'hit',
+                key: 'opensky_oauth_token',
+                ttl_seconds: Math.floor((this.state.opensky_token_expires_at - now) / 1000),
+            });
             return this.state.opensky_access_token;
         }
 
         // Token expired or missing - fetch new token
-        console.log("[OpenSky] Fetching new OAuth2 token (previous token expired or missing)");
+        logger.info({
+            event: 'oauth_token_refresh',
+            service: 'opensky',
+            success: false, // Will update to true on success
+        });
 
         const tokenResponse = await fetch(
             "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token",
@@ -91,7 +101,12 @@ export class OpenSkyClient {
 
         if (!tokenResponse.ok) {
             const errorText = await tokenResponse.text();
-            console.error("[OpenSky] Token fetch failed:", tokenResponse.status, errorText);
+            logger.error({
+                event: 'oauth_token_refresh',
+                service: 'opensky',
+                success: false,
+                error: `Status ${tokenResponse.status}: ${errorText}`,
+            });
             throw new Error(`OpenSky OAuth2 token fetch failed: ${tokenResponse.status}`);
         }
 
@@ -113,7 +128,12 @@ export class OpenSkyClient {
         this.state.opensky_access_token = data.access_token;
         this.state.opensky_token_expires_at = expiresAt;
 
-        console.log("[OpenSky] New token fetched, expires in", data.expires_in, "seconds");
+        logger.info({
+            event: 'oauth_token_refresh',
+            service: 'opensky',
+            success: true,
+            expires_in: data.expires_in,
+        });
 
         return data.access_token;
     }
@@ -243,8 +263,7 @@ export class OpenSkyClient {
 
         const url = `https://opensky-network.org/api/states/all${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
 
-        console.log("[OpenSky API] Fetching states:", url);
-
+        const timer = startTimer();
         const response = await fetch(url, {
             method: "GET",
             headers: {
@@ -255,13 +274,29 @@ export class OpenSkyClient {
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error("[OpenSky API] Error:", response.status, errorText);
+            logger.error({
+                event: 'api_call',
+                service: 'opensky',
+                method: 'getAllStates',
+                url,
+                status: response.status,
+                duration_ms: timer(),
+                success: false,
+                error: errorText,
+            });
             throw new Error(`OpenSky API returned ${response.status}: ${errorText}`);
         }
 
         const data = await response.json<OpenSkyApiResponse>();
 
-        console.log("[OpenSky API] Received", data.states?.length || 0, "aircraft");
+        logger.info({
+            event: 'api_call',
+            service: 'opensky',
+            method: 'getAllStates',
+            status: response.status,
+            duration_ms: timer(),
+            success: true,
+        });
 
         return data;
     }
@@ -300,8 +335,6 @@ export class OpenSkyClient {
 
         const bbox = this.calculateBoundingBox(lat, lon, radiusKm);
 
-        console.log("[OpenSky] Searching near", { lat, lon, radiusKm }, "→ bbox:", bbox);
-
         const response = await this.getAllStates(bbox);
 
         if (!response.states || response.states.length === 0) {
@@ -326,8 +359,6 @@ export class OpenSkyClient {
         if (!/^[0-9a-f]{6}$/.test(icao24Lower)) {
             throw new Error(`Invalid ICAO24 format: ${icao24} (must be 6 hex characters)`);
         }
-
-        console.log("[OpenSky] Looking up ICAO24:", icao24Lower);
 
         const response = await this.getAllStates({ icao24: icao24Lower });
 

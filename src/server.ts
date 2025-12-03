@@ -1,9 +1,7 @@
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createUIResource } from "@mcp-ui/server";
-import { completable, getCompleter } from "@modelcontextprotocol/sdk/server/completable.js";
 import { z } from "zod";
-import { COMMON_AIRCRAFT_ICAO24, ISO_COUNTRY_CODES } from './data/completions';
 import { OpenSkyClient } from "./api-client";
 import type { Env, State } from "./types";
 import type { Props } from "./auth/props";
@@ -11,6 +9,7 @@ import { checkBalance, consumeTokensWithRetry } from "./shared/tokenConsumption"
 import { formatInsufficientTokensError } from "./shared/tokenUtils";
 import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
 import { generateFlightMapHTML } from "./optional/ui/flight-map-generator";
+import { logger } from './shared/logger';
 import {
     GetAircraftByIcaoInput,
     FindAircraftNearLocationInput,
@@ -19,6 +18,8 @@ import {
     GetAircraftByIcaoOutputSchema,
     FindAircraftNearLocationOutputSchema,
 } from "./schemas/outputs";
+import { TOOL_METADATA, getToolDescription } from './tools/descriptions.js';
+import { SERVER_INSTRUCTIONS } from './server-instructions.js';
 
 /**
  * OpenSky Flight Tracker MCP Server
@@ -53,9 +54,9 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
         {
             capabilities: {
                 tools: {},
-                prompts: { listChanged: true },
-                completions: {} // Required for prompt argument completions
-            }
+                prompts: { listChanged: true }
+            },
+            instructions: SERVER_INSTRUCTIONS
         }
     );
 
@@ -87,16 +88,13 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
         this.server.registerTool(
             "getAircraftByIcao",
             {
-                title: "Get Aircraft By ICAO",
-                description: "Get aircraft details by ICAO 24-bit transponder address (hex string, e.g., '3c6444'). " +
-                    "This is a direct lookup - very fast and cheap. " +
-                    "Returns current position, velocity, altitude, and callsign if aircraft is currently flying. " +
-                    "💡 Tip: Use the 'search-aircraft' prompt for autocomplete suggestions.",
+                title: TOOL_METADATA.getAircraftByIcao.title,
+                description: getToolDescription("getAircraftByIcao"),
                 inputSchema: GetAircraftByIcaoInput,
                 outputSchema: GetAircraftByIcaoOutputSchema,
             },
             async ({ icao24 }) => {
-                const TOOL_COST = 1;
+                const TOOL_COST = TOOL_METADATA.getAircraftByIcao.cost.tokens;
                 const TOOL_NAME = "getAircraftByIcao";
 
                 // 0. Pre-generate action_id for idempotency
@@ -152,7 +150,12 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                     });
 
                     if (detectedPII.length > 0) {
-                        console.warn(`[Security] Tool ${TOOL_NAME}: Redacted PII types:`, detectedPII);
+                        logger.warn({
+                            event: 'pii_redacted',
+                            tool: TOOL_NAME,
+                            pii_types: detectedPII,
+                            count: detectedPII.length,
+                        });
                     }
 
                     const finalResult = redacted;
@@ -199,18 +202,13 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
         this.server.registerTool(
             "findAircraftNearLocation",
             {
-                title: "Find Aircraft Near Location",
-                description: "Find all aircraft currently flying near a geographic location. " +
-                    "Provide latitude, longitude, and search radius in kilometers. " +
-                    "Server calculates the bounding box and queries for all aircraft in that area. " +
-                    "Returns list of aircraft with position, velocity, altitude, callsign, and origin country. " +
-                    "OPTIONAL: Filter by origin_country (ISO code). " +
-                    "💡 Tip: Use the 'search-aircraft-near-location' prompt for country filter autocomplete.",
+                title: TOOL_METADATA.findAircraftNearLocation.title,
+                description: getToolDescription("findAircraftNearLocation"),
                 inputSchema: FindAircraftNearLocationInput,
                 outputSchema: FindAircraftNearLocationOutputSchema,
             },
             async ({ latitude, longitude, radius_km, origin_country }) => {
-                const TOOL_COST = 3;
+                const TOOL_COST = TOOL_METADATA.findAircraftNearLocation.cost.tokens;
                 const TOOL_NAME = "findAircraftNearLocation";
 
                 // 0. Pre-generate action_id for idempotency
@@ -250,7 +248,13 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                         filteredAircraftList = aircraftList.filter(
                             aircraft => aircraft.origin_country.toUpperCase() === origin_country.toUpperCase()
                         );
-                        console.log(`[OpenSky] Filtered ${aircraftList.length} → ${filteredAircraftList.length} aircraft by origin_country: ${origin_country}`);
+                        logger.info({
+                            event: 'aircraft_filtered',
+                            total_count: aircraftList.length,
+                            filtered_count: filteredAircraftList.length,
+                            filter_type: 'origin_country',
+                            filter_value: origin_country,
+                        });
                     }
 
                     const result = filteredAircraftList.length > 0
@@ -286,7 +290,12 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                     });
 
                     if (detectedPII.length > 0) {
-                        console.warn(`[Security] Tool ${TOOL_NAME}: Redacted PII types:`, detectedPII);
+                        logger.warn({
+                            event: 'pii_redacted',
+                            tool: TOOL_NAME,
+                            pii_types: detectedPII,
+                            count: detectedPII.length,
+                        });
                     }
 
                     const finalResult = redacted;
@@ -376,27 +385,17 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
         // PROMPTS: Provide autocomplete-enabled UI frontends for tools
         // ========================================================================
 
-        // Register prompt for aircraft search with ICAO code completion
+        // Register prompt for aircraft search
         this.server.registerPrompt(
             "search-aircraft",
             {
                 title: "Search Aircraft by ICAO Code",
-                description: "Search for an aircraft or airline by partial ICAO code to get real-time flight details. " +
-                    "Type partial codes to see autocomplete suggestions (e.g., '3c' for Lufthansa, 'a0' for United).",
+                description: "Search for an aircraft or airline by ICAO code to get real-time flight details.",
                 argsSchema: {
-                    icao_search: completable(
-                        z.string()
-                            .length(6)
-                            .regex(/^[0-9a-fA-F]{6}$/)
-                            .describe("ICAO 24-bit aircraft code (6 hex characters, e.g., '3c6444' or 'a8b2c3')"),
-                        async (value) => {
-                            const valueLower = value.toLowerCase();
-                            return COMMON_AIRCRAFT_ICAO24
-                                .filter(item => item.icao24.toLowerCase().startsWith(valueLower))
-                                .map(item => item.icao24)
-                                .slice(0, 100);
-                        }
-                    )
+                    icao_search: z.string()
+                        .length(6)
+                        .regex(/^[0-9a-fA-F]{6}$/)
+                        .describe("ICAO 24-bit aircraft code (6 hex characters, e.g., '3c6444' or 'a8b2c3')")
                 }
             },
             async ({ icao_search }) => {
@@ -415,13 +414,12 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
             }
         );
 
-        // Register prompt for geographic aircraft search with country filter completion
+        // Register prompt for geographic aircraft search with country filter
         this.server.registerPrompt(
             "search-aircraft-near-location",
             {
                 title: "Find Aircraft Near Location",
-                description: "Find all aircraft flying near a geographic location with optional country filter. " +
-                    "Type partial country codes to see autocomplete suggestions (e.g., 'U' for US, 'D' for DE).",
+                description: "Find all aircraft flying near a geographic location with optional country filter.",
                 argsSchema: {
                     latitude: z.number()
                         .min(-90)
@@ -435,23 +433,11 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                         .min(1)
                         .max(1000)
                         .describe("Search radius in kilometers (1-1000, e.g., 25 for 25km radius)"),
-                    country_filter: completable(
-                        z.string()
-                            .length(2)
-                            .regex(/^[A-Z]{2}$/)
-                            .optional()
-                            .describe("Optional filter: ISO 3166-1 alpha-2 country code (e.g., 'US', 'DE', 'FR'). Filters results by aircraft origin country."),
-                        async (value) => {
-                            if (!value) {
-                                return ISO_COUNTRY_CODES.slice(0, 20).map(item => item.code);
-                            }
-                            const valueUpper = value.toUpperCase();
-                            return ISO_COUNTRY_CODES
-                                .filter(item => item.code.startsWith(valueUpper))
-                                .map(item => item.code)
-                                .slice(0, 100);
-                        }
-                    )
+                    country_filter: z.string()
+                        .length(2)
+                        .regex(/^[A-Z]{2}$/)
+                        .optional()
+                        .describe("Optional filter: ISO 3166-1 alpha-2 country code (e.g., 'US', 'DE', 'FR'). Filters results by aircraft origin country.")
                 }
             },
             async ({ latitude, longitude, radius_km, country_filter }) => {
@@ -476,106 +462,6 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                         }
                     ]
                 };
-            }
-        );
-
-        // ========================================================================
-        // COMPLETION HANDLER: Manual implementation using getCompleter
-        // ========================================================================
-
-        // Store the completable schemas for later use
-        const icaoSearchSchema = completable(
-            z.string()
-                .length(6)
-                .regex(/^[0-9a-fA-F]{6}$/)
-                .describe("ICAO 24-bit aircraft code (6 hex characters, e.g., '3c6444' or 'a8b2c3')"),
-            async (value) => {
-                const valueLower = value.toLowerCase();
-                return COMMON_AIRCRAFT_ICAO24
-                    .filter(item => item.icao24.toLowerCase().startsWith(valueLower))
-                    .map(item => item.icao24)
-                    .slice(0, 100);
-            }
-        );
-
-        const countryFilterSchema = completable(
-            z.string().length(2).regex(/^[A-Z]{2}$/).optional().describe("ISO 3166-1 alpha-2 country code"),
-            async (value) => {
-                if (!value) {
-                    return ISO_COUNTRY_CODES.slice(0, 20).map(item => item.code);
-                }
-                const valueUpper = value.toUpperCase();
-                return ISO_COUNTRY_CODES
-                    .filter(item => item.code.startsWith(valueUpper))
-                    .map(item => item.code)
-                    .slice(0, 100);
-            }
-        );
-
-        // Access the underlying Server to register completion handler
-        this.server.server.setRequestHandler(
-            {
-                method: z.literal("completion/complete"),
-                params: z.object({
-                    ref: z.object({
-                        type: z.string(),
-                        name: z.string().optional(),
-                        uri: z.string().optional(),
-                    }),
-                    argument: z.object({
-                        name: z.string(),
-                        value: z.string().optional(),
-                    }),
-                }),
-            } as any,
-            async (request) => {
-                console.log("🔍 [COMPLETION] Received completion/complete request:", JSON.stringify(request.params, null, 2));
-
-                const { ref, argument } = request.params;
-
-                // Only handle prompt completions
-                if (ref.type !== "ref/prompt") {
-                    console.log("🔍 [COMPLETION] Not a prompt reference, returning empty");
-                    return { completion: { values: [], total: 0, hasMore: false } };
-                }
-
-                // Handle search-aircraft prompt - icao_search argument
-                if (ref.name === "search-aircraft" && argument.name === "icao_search") {
-                    console.log("🔍 [COMPLETION] Handling search-aircraft ICAO completion");
-                    const completer = getCompleter(icaoSearchSchema);
-                    if (completer) {
-                        const suggestions = await completer(argument.value || "");
-                        console.log(`🔍 [COMPLETION] Returning ${suggestions.length} ICAO suggestions`);
-                        return {
-                            completion: {
-                                values: suggestions.slice(0, 100),
-                                total: suggestions.length,
-                                hasMore: false,
-                            },
-                        };
-                    }
-                }
-
-                // Handle search-aircraft-near-location prompt - country_filter argument
-                if (ref.name === "search-aircraft-near-location" && argument.name === "country_filter") {
-                    console.log("🔍 [COMPLETION] Handling search-aircraft-near-location country completion");
-                    const completer = getCompleter(countryFilterSchema);
-                    if (completer) {
-                        const suggestions = await completer(argument.value || "");
-                        console.log(`🔍 [COMPLETION] Returning ${suggestions.length} country suggestions`);
-                        return {
-                            completion: {
-                                values: suggestions.slice(0, 100),
-                                total: suggestions.length,
-                                hasMore: false,
-                            },
-                        };
-                    }
-                }
-
-                // No completions for other prompts/arguments
-                console.log("🔍 [COMPLETION] No matching handler, returning empty");
-                return { completion: { values: [], total: 0, hasMore: false } };
             }
         );
     }

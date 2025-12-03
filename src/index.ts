@@ -3,6 +3,7 @@ import { OpenSkyMcp } from "./server";
 import { AuthkitHandler } from "./auth/authkit-handler";
 import { handleApiKeyRequest } from "./api-key-handler";
 import type { Env } from "./types";
+import { logger } from './shared/logger';
 
 // Export the McpAgent class for Cloudflare Workers
 export { OpenSkyMcp };
@@ -76,15 +77,15 @@ export default {
 
             // Check for API key authentication on MCP endpoints
             if (isApiKeyRequest(url.pathname, authHeader)) {
-                console.log(`🔐 [Dual Auth] API key request detected: ${url.pathname}`);
+                // API key path detected - log and route
                 return await handleApiKeyRequest(request, env, ctx, url.pathname);
             }
 
             // Otherwise, use OAuth flow
-            console.log(`🔐 [Dual Auth] OAuth request: ${url.pathname}`);
             return await oauthProvider.fetch(request, env, ctx);
 
         } catch (error) {
+            // Log generic errors without structured format (index.ts routing errors are rare)
             console.error("[Dual Auth] Error:", error);
             return new Response(
                 JSON.stringify({
