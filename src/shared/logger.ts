@@ -247,6 +247,27 @@ export type SystemEvent =
       event: 'lru_cache_eviction';
       evicted_user_id: string;
       cache_size: number;
+    }
+  | {
+      event: 'server_error';
+      error: string;
+      context?: string;
+      pathname?: string;
+    };
+
+/**
+ * SEP-1865 MCP Apps UI events
+ */
+export type UIEvent =
+  | {
+      event: 'ui_capability_check';
+      host_supports_ui: boolean;
+      extension_id: string;
+    }
+  | {
+      event: 'ui_resource_registered';
+      uri: string;
+      name: string;
     };
 
 /**
@@ -260,7 +281,8 @@ export type LogEvent =
   | SecurityEvent
   | DataEvent
   | TransportEvent
-  | SystemEvent;
+  | SystemEvent
+  | UIEvent;
 
 /**
  * Complete log entry structure
@@ -325,7 +347,8 @@ class Logger {
 
     // Emit as structured JSON to console
     // Cloudflare Workers Logs will automatically index all fields
-    console.log(entry);
+    // JSON.stringify ensures Cloudflare parses it as a structured object
+    console.log(JSON.stringify(entry));
   }
 }
 

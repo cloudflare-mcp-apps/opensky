@@ -1,82 +1,33 @@
-import { AircraftData } from '../../types';
+/**
+ * SEP-1865 MCP Apps Extension: Flight Map Template Generator
+ *
+ * This module generates an interactive flight map HTML template that:
+ * - Implements the SEP-1865 JSON-RPC 2.0 protocol over postMessage
+ * - Performs ui/initialize handshake with the host
+ * - Receives data via ui/notifications/tool-input and ui/notifications/tool-result
+ * - Reports size changes via ui/notifications/size-change
+ * - Handles theme changes via ui/notifications/host-context-changed
+ *
+ * The template is predeclared as a resource and does NOT contain embedded data.
+ * All aircraft data is received dynamically from the host.
+ *
+ * @see https://github.com/modelcontextprotocol/specification/blob/main/docs/specification/extensions/sep-1865-mcp-apps.md
+ */
 
 /**
- * Generates a self-contained SVG-based flight map HTML
+ * Generates a self-contained SVG-based flight map HTML template
  *
- * This version uses pure SVG and inline JavaScript with no external dependencies,
- * making it fully compatible with MCP-UI iframe sandboxing and CSP restrictions.
+ * This template implements the SEP-1865 MCP Apps protocol:
+ * 1. Sends ui/initialize request on load
+ * 2. Sends ui/notifications/initialized after receiving initialize response
+ * 3. Listens for ui/notifications/tool-input (search parameters)
+ * 4. Listens for ui/notifications/tool-result (aircraft data)
+ * 5. Reports ui/notifications/size-change on resize
+ * 6. Handles ui/notifications/host-context-changed (theme, viewport)
  *
- * Features:
- * - Interactive aircraft markers with rotation based on heading
- * - Click-to-view aircraft details
- * - Search radius visualization
- * - Responsive design
- * - No external CSS/JS required
- *
- * @param data - Aircraft search response data with aircraft list and location
- * @returns Complete HTML string ready for embedding in MCP-UI
+ * @returns Complete HTML template string ready for embedding
  */
-export function generateFlightMapHTML(data: {
-  search_center: { latitude: number; longitude: number };
-  radius_km: number;
-  aircraft_count: number;
-  aircraft: AircraftData[];
-}): string {
-  const { search_center, radius_km, aircraft_count, aircraft } = data;
-  const { latitude: centerLat, longitude: centerLon } = search_center;
-
-  // Calculate bounding box for SVG viewport
-  // Approximate: 1 degree latitude = 111km, 1 degree longitude = 111km * cos(lat)
-  const latKm = 111;
-  const lonKm = 111 * Math.cos(centerLat * Math.PI / 180);
-  const latRange = (radius_km * 1.5) / latKm;
-  const lonRange = (radius_km * 1.5) / lonKm;
-
-  const minLat = centerLat - latRange;
-  const maxLat = centerLat + latRange;
-  const minLon = centerLon - lonRange;
-  const maxLon = centerLon + lonRange;
-
-  // SVG viewport dimensions
-  const svgWidth = 800;
-  const svgHeight = 600;
-
-  // Convert lat/lon to SVG coordinates
-  const toSvgX = (lon: number) => ((lon - minLon) / (maxLon - minLon)) * svgWidth;
-  const toSvgY = (lat: number) => svgHeight - ((lat - minLat) / (maxLat - minLat)) * svgHeight;
-
-  // Generate aircraft markers
-  const aircraftMarkers = aircraft
-    .filter(a => a.position.latitude !== null && a.position.longitude !== null)
-    .map((a, i) => {
-      const x = toSvgX(a.position.longitude!);
-      const y = toSvgY(a.position.latitude!);
-      const heading = a.velocity.true_track_deg ?? 0;
-      const alt = a.position.altitude_m;
-
-      // Color based on altitude
-      let color = '#3388ff';
-      if (alt !== null && alt !== undefined) {
-        if (alt <= 300) color = '#d4353d';
-        else if (alt <= 3000) color = '#f58220';
-        else if (alt <= 6000) color = '#fac858';
-        else if (alt <= 9000) color = '#5eaed8';
-        else color = '#1f77b4';
-      }
-
-      // Aircraft SVG path (airplane shape)
-      return `
-        <g class="aircraft" data-index="${i}" transform="translate(${x}, ${y}) rotate(${heading})" style="cursor: pointer;">
-          <title>${a.callsign || 'Unknown'} (${a.icao24})</title>
-          <path d="M0,-12 L3,-4 L12,2 L3,2 L3,8 L6,12 L-6,12 L-3,8 L-3,2 L-12,2 L-3,-4 Z"
-                fill="${color}" stroke="#333" stroke-width="1" opacity="0.9"/>
-        </g>`;
-    })
-    .join('\n');
-
-  // Escape JSON for safe embedding
-  const aircraftJSON = JSON.stringify(aircraft).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
-
+export function generateFlightMapTemplate(): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -92,6 +43,10 @@ export function generateFlightMapHTML(data: {
       display: flex;
       flex-direction: column;
     }
+    body.dark-theme {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e0e0e0;
+    }
     .header {
       background: #2c3e50;
       color: white;
@@ -100,6 +55,9 @@ export function generateFlightMapHTML(data: {
       justify-content: space-between;
       align-items: center;
       box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+    .dark-theme .header {
+      background: #0f0f1a;
     }
     .header h1 {
       font-size: 18px;
@@ -138,6 +96,9 @@ export function generateFlightMapHTML(data: {
       height: 100%;
       background: linear-gradient(180deg, #a8d8ea 0%, #87ceeb 30%, #98d8c8 70%, #c8e6c9 100%);
     }
+    .dark-theme .map-svg {
+      background: linear-gradient(180deg, #1a1a2e 0%, #16213e 30%, #0f3460 70%, #1a1a2e 100%);
+    }
     .info-panel {
       position: absolute;
       top: 10px;
@@ -151,6 +112,10 @@ export function generateFlightMapHTML(data: {
       font-size: 13px;
       display: none;
     }
+    .dark-theme .info-panel {
+      background: #1a1a2e;
+      color: #e0e0e0;
+    }
     .info-panel.visible { display: block; }
     .info-panel h3 {
       margin-bottom: 12px;
@@ -160,6 +125,9 @@ export function generateFlightMapHTML(data: {
       display: flex;
       justify-content: space-between;
       align-items: center;
+    }
+    .dark-theme .info-panel h3 {
+      color: #e0e0e0;
     }
     .close-btn {
       background: none;
@@ -171,15 +139,21 @@ export function generateFlightMapHTML(data: {
       line-height: 1;
     }
     .close-btn:hover { color: #333; }
+    .dark-theme .close-btn:hover { color: #fff; }
     .info-row {
       display: flex;
       justify-content: space-between;
       padding: 6px 0;
       border-bottom: 1px solid #eee;
     }
+    .dark-theme .info-row {
+      border-bottom-color: #333;
+    }
     .info-row:last-child { border-bottom: none; }
     .info-label { color: #666; font-weight: 500; }
+    .dark-theme .info-label { color: #aaa; }
     .info-value { color: #333; text-align: right; }
+    .dark-theme .info-value { color: #e0e0e0; }
     .legend {
       position: absolute;
       bottom: 10px;
@@ -190,10 +164,16 @@ export function generateFlightMapHTML(data: {
       font-size: 11px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
+    .dark-theme .legend {
+      background: rgba(26,26,46,0.95);
+    }
     .legend-title {
       font-weight: 600;
       margin-bottom: 8px;
       color: #2c3e50;
+    }
+    .dark-theme .legend-title {
+      color: #e0e0e0;
     }
     .legend-item {
       display: flex;
@@ -208,6 +188,7 @@ export function generateFlightMapHTML(data: {
       border: 1px solid #333;
     }
     .grid-line { stroke: #ffffff; stroke-width: 0.5; opacity: 0.3; }
+    .dark-theme .grid-line { stroke: #444; }
     .center-marker { fill: #ff7800; stroke: #fff; stroke-width: 2; }
     .radius-circle { fill: rgba(51,136,255,0.1); stroke: #3388ff; stroke-width: 2; stroke-dasharray: 8,4; }
     .aircraft:hover path { opacity: 1; stroke-width: 2; }
@@ -221,6 +202,29 @@ export function generateFlightMapHTML(data: {
       font-size: 11px;
       color: #666;
     }
+    .dark-theme .coordinates {
+      background: rgba(26,26,46,0.9);
+      color: #aaa;
+    }
+    .loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: #666;
+    }
+    .dark-theme .loading { color: #aaa; }
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #e0e0e0;
+      border-top-color: #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -228,38 +232,32 @@ export function generateFlightMapHTML(data: {
     <h1><span style="font-size: 24px;">&#9992;</span> Flight Tracker</h1>
     <div class="stats">
       <div class="stat">
-        <span class="stat-value">${aircraft_count}</span>
+        <span class="stat-value" id="aircraftCount">-</span>
         <span class="stat-label">Aircraft</span>
       </div>
       <div class="stat">
-        <span class="stat-value">${radius_km}</span>
+        <span class="stat-value" id="radiusKm">-</span>
         <span class="stat-label">km radius</span>
       </div>
     </div>
   </div>
 
   <div class="map-container">
-    <svg class="map-svg" viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMidYMid meet">
+    <div class="loading" id="loadingIndicator">
+      <div class="loading-spinner"></div>
+      <div>Waiting for flight data...</div>
+    </div>
+
+    <svg class="map-svg" id="mapSvg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet" style="display: none;">
       <defs>
         <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
           <path d="M 50 0 L 0 0 0 50" fill="none" class="grid-line"/>
         </pattern>
       </defs>
-
-      <!-- Grid background -->
       <rect width="100%" height="100%" fill="url(#grid)"/>
-
-      <!-- Search radius circle -->
-      <circle cx="${toSvgX(centerLon)}" cy="${toSvgY(centerLat)}"
-              r="${(radius_km / ((maxLon - minLon) * lonKm)) * svgWidth}"
-              class="radius-circle"/>
-
-      <!-- Center marker -->
-      <circle cx="${toSvgX(centerLon)}" cy="${toSvgY(centerLat)}" r="8" class="center-marker"/>
-      <circle cx="${toSvgX(centerLon)}" cy="${toSvgY(centerLat)}" r="3" fill="#fff"/>
-
-      <!-- Aircraft markers -->
-      ${aircraftMarkers}
+      <g id="radiusCircle"></g>
+      <g id="centerMarker"></g>
+      <g id="aircraftMarkers"></g>
     </svg>
 
     <div class="info-panel" id="infoPanel">
@@ -285,16 +283,278 @@ export function generateFlightMapHTML(data: {
       <div class="legend-item"><div class="legend-color" style="background:#1f77b4"></div>Cruise (&gt;9000m)</div>
     </div>
 
-    <div class="coordinates">
-      Center: ${centerLat.toFixed(4)}&deg;, ${centerLon.toFixed(4)}&deg;
+    <div class="coordinates" id="coordinates" style="display: none;">
+      Center: <span id="centerCoords">-</span>
     </div>
   </div>
 
   <script>
-    const aircraftData = ${aircraftJSON};
+    /**
+     * SEP-1865 MCP Apps Protocol Implementation
+     *
+     * This script implements the Guest UI side of the MCP Apps extension protocol.
+     * Communication uses JSON-RPC 2.0 over postMessage.
+     */
+
+    // State
+    let requestId = 1;
+    let initialized = false;
+    let hostContext = {};
+    let toolInput = null;
+    let aircraftData = [];
+
+    // SVG viewport
+    const SVG_WIDTH = 800;
+    const SVG_HEIGHT = 600;
+
+    // ============================================
+    // JSON-RPC Communication Layer
+    // ============================================
+
+    function sendRequest(method, params) {
+      const id = requestId++;
+      window.parent.postMessage({ jsonrpc: "2.0", id, method, params }, '*');
+      return id;
+    }
+
+    function sendNotification(method, params) {
+      window.parent.postMessage({ jsonrpc: "2.0", method, params }, '*');
+    }
+
+    function sendResponse(id, result) {
+      window.parent.postMessage({ jsonrpc: "2.0", id, result }, '*');
+    }
+
+    // ============================================
+    // SEP-1865 Lifecycle
+    // ============================================
+
+    async function initialize() {
+      console.log('[FlightMap] Sending ui/initialize request');
+
+      sendRequest("ui/initialize", {
+        capabilities: {},
+        clientInfo: {
+          name: "OpenSky Flight Map",
+          version: "1.0.0"
+        },
+        protocolVersion: "2025-06-18"
+      });
+    }
+
+    function handleInitializeResponse(result) {
+      console.log('[FlightMap] Received initialize response:', result);
+
+      // Store host context
+      if (result.hostContext) {
+        hostContext = result.hostContext;
+        applyHostContext(hostContext);
+      }
+
+      // Send initialized notification
+      sendNotification("ui/notifications/initialized", {});
+      initialized = true;
+
+      console.log('[FlightMap] Initialization complete');
+    }
+
+    // ============================================
+    // Message Handler
+    // ============================================
+
+    window.addEventListener('message', (event) => {
+      const msg = event.data;
+
+      // Validate JSON-RPC message
+      if (!msg || msg.jsonrpc !== "2.0") return;
+
+      // Response to our request (has id and result/error)
+      if (msg.id !== undefined && (msg.result !== undefined || msg.error !== undefined)) {
+        if (msg.result && !initialized) {
+          // This is likely the initialize response
+          handleInitializeResponse(msg.result);
+        }
+        return;
+      }
+
+      // Notification from host (has method but no id)
+      if (msg.method) {
+        handleNotification(msg.method, msg.params);
+        return;
+      }
+
+      // Request from host (has method and id)
+      if (msg.method && msg.id !== undefined) {
+        handleRequest(msg.id, msg.method, msg.params);
+        return;
+      }
+    });
+
+    function handleNotification(method, params) {
+      switch (method) {
+        case 'ui/notifications/tool-input':
+          console.log('[FlightMap] Received tool-input:', params);
+          toolInput = params.arguments || {};
+          // Tool input contains search parameters (lat, lng, radius)
+          // We'll use this to configure the map center
+          break;
+
+        case 'ui/notifications/tool-input-partial':
+          // Optional: Handle streaming partial arguments
+          console.log('[FlightMap] Received partial tool-input:', params);
+          break;
+
+        case 'ui/notifications/tool-result':
+          console.log('[FlightMap] Received tool-result:', params);
+          handleToolResult(params);
+          break;
+
+        case 'ui/notifications/host-context-changed':
+          console.log('[FlightMap] Received host-context-changed:', params);
+          Object.assign(hostContext, params);
+          applyHostContext(params);
+          break;
+
+        default:
+          console.log('[FlightMap] Unknown notification:', method);
+      }
+    }
+
+    function handleRequest(id, method, params) {
+      switch (method) {
+        case 'ui/resource-teardown':
+          console.log('[FlightMap] Received teardown request');
+          // Cleanup if needed
+          sendResponse(id, {});
+          break;
+
+        default:
+          console.log('[FlightMap] Unknown request:', method);
+          window.parent.postMessage({
+            jsonrpc: "2.0",
+            id,
+            error: { code: -32601, message: "Method not found" }
+          }, '*');
+      }
+    }
+
+    // ============================================
+    // Data Handling & Rendering
+    // ============================================
+
+    function handleToolResult(result) {
+      // Hide loading indicator
+      document.getElementById('loadingIndicator').style.display = 'none';
+      document.getElementById('mapSvg').style.display = 'block';
+      document.getElementById('coordinates').style.display = 'block';
+
+      // Extract structured content
+      const data = result.structuredContent || result;
+
+      if (!data.search_center || !data.aircraft) {
+        console.error('[FlightMap] Invalid tool result structure');
+        return;
+      }
+
+      // Store aircraft data
+      aircraftData = data.aircraft || [];
+
+      // Update stats
+      document.getElementById('aircraftCount').textContent = data.aircraft_count || aircraftData.length;
+      document.getElementById('radiusKm').textContent = data.radius_km || '-';
+
+      // Update coordinates
+      const center = data.search_center;
+      document.getElementById('centerCoords').textContent =
+        center.latitude.toFixed(4) + '\\u00B0, ' + center.longitude.toFixed(4) + '\\u00B0';
+
+      // Render map
+      renderMap(center, data.radius_km || 50, aircraftData);
+    }
+
+    function renderMap(center, radiusKm, aircraft) {
+      const centerLat = center.latitude;
+      const centerLon = center.longitude;
+
+      // Calculate bounding box for SVG viewport
+      const latKm = 111;
+      const lonKm = 111 * Math.cos(centerLat * Math.PI / 180);
+      const latRange = (radiusKm * 1.5) / latKm;
+      const lonRange = (radiusKm * 1.5) / lonKm;
+
+      const minLat = centerLat - latRange;
+      const maxLat = centerLat + latRange;
+      const minLon = centerLon - lonRange;
+      const maxLon = centerLon + lonRange;
+
+      // Coordinate conversion functions
+      const toSvgX = (lon) => ((lon - minLon) / (maxLon - minLon)) * SVG_WIDTH;
+      const toSvgY = (lat) => SVG_HEIGHT - ((lat - minLat) / (maxLat - minLat)) * SVG_HEIGHT;
+
+      // Render radius circle
+      const radiusCircleG = document.getElementById('radiusCircle');
+      const radiusPx = (radiusKm / ((maxLon - minLon) * lonKm)) * SVG_WIDTH;
+      radiusCircleG.innerHTML = \`
+        <circle cx="\${toSvgX(centerLon)}" cy="\${toSvgY(centerLat)}"
+                r="\${radiusPx}" class="radius-circle"/>
+      \`;
+
+      // Render center marker
+      const centerMarkerG = document.getElementById('centerMarker');
+      const cx = toSvgX(centerLon);
+      const cy = toSvgY(centerLat);
+      centerMarkerG.innerHTML = \`
+        <circle cx="\${cx}" cy="\${cy}" r="8" class="center-marker"/>
+        <circle cx="\${cx}" cy="\${cy}" r="3" fill="#fff"/>
+      \`;
+
+      // Render aircraft markers
+      const markersG = document.getElementById('aircraftMarkers');
+      const markers = aircraft
+        .filter(a => a.position.latitude !== null && a.position.longitude !== null)
+        .map((a, i) => {
+          const x = toSvgX(a.position.longitude);
+          const y = toSvgY(a.position.latitude);
+          const heading = a.velocity.true_track_deg || 0;
+          const alt = a.position.altitude_m;
+
+          // Color based on altitude
+          let color = '#3388ff';
+          if (alt !== null && alt !== undefined) {
+            if (alt <= 300) color = '#d4353d';
+            else if (alt <= 3000) color = '#f58220';
+            else if (alt <= 6000) color = '#fac858';
+            else if (alt <= 9000) color = '#5eaed8';
+            else color = '#1f77b4';
+          }
+
+          return \`
+            <g class="aircraft" data-index="\${i}" transform="translate(\${x}, \${y}) rotate(\${heading})" style="cursor: pointer;">
+              <title>\${a.callsign || 'Unknown'} (\${a.icao24})</title>
+              <path d="M0,-12 L3,-4 L12,2 L3,2 L3,8 L6,12 L-6,12 L-3,8 L-3,2 L-12,2 L-3,-4 Z"
+                    fill="\${color}" stroke="#333" stroke-width="1" opacity="0.9"/>
+            </g>
+          \`;
+        })
+        .join('\\n');
+
+      markersG.innerHTML = markers;
+
+      // Add click handlers
+      document.querySelectorAll('.aircraft').forEach(el => {
+        el.addEventListener('click', function() {
+          showAircraftInfo(parseInt(this.dataset.index));
+        });
+      });
+    }
+
+    // ============================================
+    // UI Interactions
+    // ============================================
 
     function showAircraftInfo(index) {
-      const a = aircraftData.filter(ac => ac.position.latitude && ac.position.longitude)[index];
+      const visibleAircraft = aircraftData.filter(ac => ac.position.latitude && ac.position.longitude);
+      const a = visibleAircraft[index];
       if (!a) return;
 
       document.getElementById('callsign').textContent = a.callsign || 'Unknown';
@@ -315,13 +575,99 @@ export function generateFlightMapHTML(data: {
       document.getElementById('infoPanel').classList.remove('visible');
     }
 
-    // Add click handlers to aircraft markers
-    document.querySelectorAll('.aircraft').forEach(el => {
-      el.addEventListener('click', function() {
-        showAircraftInfo(parseInt(this.dataset.index));
+    // ============================================
+    // Host Context Handling
+    // ============================================
+
+    function applyHostContext(context) {
+      // Apply theme
+      if (context.theme === 'dark') {
+        document.body.classList.add('dark-theme');
+      } else if (context.theme === 'light') {
+        document.body.classList.remove('dark-theme');
+      }
+
+      // Handle viewport changes if needed
+      if (context.viewport) {
+        console.log('[FlightMap] Viewport:', context.viewport);
+      }
+    }
+
+    // ============================================
+    // Size Change Notifications
+    // ============================================
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (!initialized) return;
+
+      sendNotification('ui/notifications/size-change', {
+        width: document.body.scrollWidth,
+        height: document.body.scrollHeight
       });
     });
+
+    resizeObserver.observe(document.body);
+
+    // ============================================
+    // Startup
+    // ============================================
+
+    // Start initialization
+    initialize();
   </script>
 </body>
 </html>`;
+}
+
+/**
+ * Legacy function for backward compatibility
+ * @deprecated Use generateFlightMapTemplate() for SEP-1865 compliance
+ */
+export function generateFlightMapHTML(data: {
+  search_center: { latitude: number; longitude: number };
+  radius_km: number;
+  aircraft_count: number;
+  aircraft: Array<{
+    icao24: string;
+    callsign: string | null;
+    origin_country: string;
+    position: {
+      latitude: number | null;
+      longitude: number | null;
+      altitude_m: number | null;
+      on_ground: boolean;
+    };
+    velocity: {
+      ground_speed_ms: number | null;
+      vertical_rate_ms: number | null;
+      true_track_deg: number | null;
+    };
+    last_contact: number;
+    squawk: string | null;
+  }>;
+}): string {
+  console.warn(
+    "[DEPRECATED] generateFlightMapHTML is deprecated. Use generateFlightMapTemplate() for SEP-1865 compliance."
+  );
+
+  // For backward compatibility, we still generate inline HTML
+  // but the preferred approach is to use the template + notifications pattern
+  const template = generateFlightMapTemplate();
+
+  // Inject the data as an initial script that simulates receiving tool-result
+  const dataScript = `
+    <script>
+      // Injected data for backward compatibility
+      window.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+          handleToolResult({
+            structuredContent: ${JSON.stringify(data).replace(/</g, "\\u003c").replace(/>/g, "\\u003e")}
+          });
+        }, 100);
+      });
+    </script>
+  `;
+
+  // Insert before closing body tag
+  return template.replace("</body>", dataScript + "</body>");
 }

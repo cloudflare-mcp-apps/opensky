@@ -24,15 +24,14 @@ import { getUserById } from "./shared/tokenUtils";
 import type { Env, State } from "./types";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { createUIResource } from "@mcp-ui/server";
 import { OpenSkyClient } from "./api-client";
 import { checkBalance, consumeTokensWithRetry } from "./shared/tokenConsumption";
 import { formatInsufficientTokensError, formatAccountDeletedError } from "./shared/tokenUtils";
 import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
-import { generateFlightMapHTML } from "./optional/ui/flight-map-generator";
 import { TOOL_METADATA, getToolDescription } from './tools/descriptions.js';
 import { SERVER_INSTRUCTIONS } from './server-instructions.js';
 import { logger } from './shared/logger';
+import { UI_RESOURCES, UI_MIME_TYPE } from './resources/ui-resources.js';
 
 /**
  * Simple LRU (Least Recently Used) Cache for MCP Server instances
@@ -921,57 +920,34 @@ async function executeFindAircraftNearLocationTool(
     actionId
   );
 
-  // Return as MCP-UI resource with interactive map
-  if (aircraftList.length > 0) {
-    const mapHTML = generateFlightMapHTML({
-      search_center: { latitude: args.latitude, longitude: args.longitude },
-      radius_km: args.radius_km,
-      aircraft_count: aircraftList.length,
-      aircraft: aircraftList
-    });
+  // SEP-1865: Return structuredContent for UI rendering via notifications
+  // API key path doesn't have capability negotiation, so we return text + structuredContent
+  // Hosts that support SEP-1865 will use _meta["ui/resourceUri"] from tool definition
 
-    const uiResource = createUIResource({
-      uri: `ui://opensky/flight-map-${Date.now()}`,
-      content: {
-        type: 'rawHtml',
-        htmlString: mapHTML
-      },
-      encoding: 'text',
-      metadata: {
-        title: 'Flight Map',
-        description: `${aircraftList.length} aircraft near ${args.latitude}, ${args.longitude}`,
-        // CSP configuration for MCP Apps hosts (SEP-1724)
-        ui: {
-          csp: {
-            // OpenStreetMap tile servers for map rendering
-            resourceDomains: [
-              'https://*.tile.openstreetmap.org',
-              'https://unpkg.com'
-            ]
-          }
-        }
-      }
-    });
+  const structuredResult = {
+    search_center: { latitude: args.latitude, longitude: args.longitude },
+    radius_km: args.radius_km,
+    origin_country_filter: null,
+    aircraft_count: aircraftList.length,
+    aircraft: aircraftList
+  };
 
-    return {
-      content: [uiResource as any],
-      structuredContent: {
-        search_center: { latitude: args.latitude, longitude: args.longitude },
-        radius_km: args.radius_km,
-        aircraft_count: aircraftList.length,
-        aircraft: aircraftList
-      }
-    };
-  } else {
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: `No aircraft currently flying within ${args.radius_km}km of (${args.latitude}, ${args.longitude})`
-        }
-      ]
-    };
-  }
+  // Generate summary text for model context (SEP-1865 best practice)
+  const summaryText = aircraftList.length > 0
+    ? `Found ${aircraftList.length} aircraft within ${args.radius_km}km of (${args.latitude}, ${args.longitude}). ` +
+      `Top aircraft: ${aircraftList.slice(0, 3).map(a => a.callsign || a.icao24).join(', ')}` +
+      (aircraftList.length > 3 ? ` and ${aircraftList.length - 3} more` : '')
+    : `No aircraft currently flying within ${args.radius_km}km of (${args.latitude}, ${args.longitude})`;
+
+  return {
+    content: [{
+      type: "text" as const,
+      text: summaryText
+    }],
+    // structuredContent is sent to UI via ui/notifications/tool-result
+    // This data is NOT added to model context (SEP-1865 best practice)
+    structuredContent: structuredResult
+  };
 }
 
 /**

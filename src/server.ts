@@ -1,6 +1,5 @@
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { createUIResource } from "@mcp-ui/server";
 import { z } from "zod";
 import { OpenSkyClient } from "./api-client";
 import type { Env, State } from "./types";
@@ -8,7 +7,7 @@ import type { Props } from "./auth/props";
 import { checkBalance, consumeTokensWithRetry } from "./shared/tokenConsumption";
 import { formatInsufficientTokensError } from "./shared/tokenUtils";
 import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
-import { generateFlightMapHTML } from "./optional/ui/flight-map-generator";
+import { generateFlightMapTemplate } from "./optional/ui/flight-map-generator";
 import { logger } from './shared/logger';
 import {
     GetAircraftByIcaoInput,
@@ -20,6 +19,10 @@ import {
 } from "./schemas/outputs";
 import { TOOL_METADATA, getToolDescription } from './tools/descriptions.js';
 import { SERVER_INSTRUCTIONS } from './server-instructions.js';
+import {
+    UI_RESOURCES,
+    UI_MIME_TYPE,
+} from './resources/ui-resources.js';
 
 /**
  * OpenSky Flight Tracker MCP Server
@@ -54,7 +57,8 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
         {
             capabilities: {
                 tools: {},
-                prompts: { listChanged: true }
+                prompts: { listChanged: true },
+                resources: { listChanged: true }  // SEP-1865: Enable resource discovery
             },
             instructions: SERVER_INSTRUCTIONS
         }
@@ -79,6 +83,43 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
         };
 
         const openskyClient = new OpenSkyClient(this.env, this.state, setStateWrapper);
+
+        // ========================================================================
+        // SEP-1865 MCP Apps: Resource Registration
+        // ========================================================================
+        // Note: Capability detection happens at runtime during tool calls since
+        // McpAgent doesn't expose client capabilities during init()
+        // We always register resources - hosts that don't support UI will ignore them
+
+        const flightMapResource = UI_RESOURCES.flightMap;
+
+        this.server.registerResource(
+            flightMapResource.uri,
+            flightMapResource.name,
+            {
+                description: flightMapResource.description,
+                mimeType: flightMapResource.mimeType
+            },
+            async () => {
+                // Return the HTML template (dynamic data comes via ui/notifications/tool-result)
+                const templateHTML = generateFlightMapTemplate();
+
+                return {
+                    contents: [{
+                        uri: flightMapResource.uri,
+                        mimeType: UI_MIME_TYPE,
+                        text: templateHTML,
+                        _meta: flightMapResource._meta as Record<string, unknown>
+                    }]
+                };
+            }
+        );
+
+        logger.info({
+            event: 'ui_resource_registered',
+            uri: flightMapResource.uri,
+            name: flightMapResource.name,
+        });
 
         // ========================================================================
         // Tool 1: Get Aircraft by ICAO24 (1 token cost)
@@ -206,6 +247,12 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                 description: getToolDescription("findAircraftNearLocation"),
                 inputSchema: FindAircraftNearLocationInput,
                 outputSchema: FindAircraftNearLocationOutputSchema,
+                // SEP-1865: Link tool to predeclared UI resource
+                // Host will render this resource when tool returns results
+                // Always include - hosts that don't support UI will ignore it
+                _meta: {
+                    "ui/resourceUri": UI_RESOURCES.flightMap.uri
+                },
             },
             async ({ latitude, longitude, radius_km, origin_country }) => {
                 const TOOL_COST = TOOL_METADATA.findAircraftNearLocation.cost.tokens;
@@ -314,64 +361,39 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                         actionId
                     );
 
-                    // 6. Return result as MCP-UI resource
-                    const structuredResult = filteredAircraftList.length > 0
-                        ? {
-                            search_center: { latitude, longitude },
-                            radius_km,
-                            origin_country_filter: origin_country || null,
-                            aircraft_count: filteredAircraftList.length,
-                            aircraft: filteredAircraftList
-                        }
-                        : null;
+                    // 6. Return result with structuredContent for SEP-1865 UI rendering
+                    // Host will:
+                    // 1. Fetch the UI resource template via resources/read
+                    // 2. Send tool input via ui/notifications/tool-input
+                    // 3. Send this structuredContent via ui/notifications/tool-result
+                    // 4. The template will render the aircraft data dynamically
 
-                    // Generate interactive Leaflet map HTML
-                    if (filteredAircraftList.length > 0) {
-                        const mapHTML = generateFlightMapHTML({
-                            search_center: { latitude, longitude },
-                            radius_km,
-                            aircraft_count: filteredAircraftList.length,
-                            aircraft: filteredAircraftList
-                        });
+                    const structuredResult = {
+                        search_center: { latitude, longitude },
+                        radius_km,
+                        origin_country_filter: origin_country || null,
+                        aircraft_count: filteredAircraftList.length,
+                        aircraft: filteredAircraftList
+                    };
 
-                        // Create UI resource with self-contained SVG map (no external dependencies)
-                        // This approach avoids CSP issues with MCP-UI iframe sandboxing
-                        const uiResource = createUIResource({
-                            uri: `ui://opensky/flight-map-${Date.now()}`,
-                            content: {
-                                type: 'rawHtml',
-                                htmlString: mapHTML
-                            },
-                            encoding: 'text',
-                            metadata: {
-                                title: 'Flight Map',
-                                description: `${filteredAircraftList.length} aircraft near ${latitude}, ${longitude}` +
-                                    (origin_country ? ` (filtered: ${origin_country})` : '')
-                                // No CSP configuration needed - SVG map is fully self-contained
-                            }
-                        });
+                    // Generate summary text for model context (SEP-1865 best practice)
+                    const summaryText = filteredAircraftList.length > 0
+                        ? `Found ${filteredAircraftList.length} aircraft within ${radius_km}km of (${latitude}, ${longitude})` +
+                          (origin_country ? ` from ${origin_country}` : '') +
+                          `. Top aircraft: ${filteredAircraftList.slice(0, 3).map(a => a.callsign || a.icao24).join(', ')}` +
+                          (filteredAircraftList.length > 3 ? ` and ${filteredAircraftList.length - 3} more` : '')
+                        : `No aircraft currently flying within ${radius_km}km of (${latitude}, ${longitude})` +
+                          (origin_country ? ` with origin_country: ${origin_country}` : '');
 
-                        return {
-                            content: [uiResource as any],
-                            structuredContent: structuredResult as any
-                        };
-                    } else {
-                        // No aircraft found - return text message with valid schema structure
-                        return {
-                            content: [{
-                                type: "text" as const,
-                                text: `No aircraft currently flying within ${radius_km}km of (${latitude}, ${longitude})` +
-                                    (origin_country ? ` with origin_country: ${origin_country}` : '')
-                            }],
-                            structuredContent: {
-                                search_center: { latitude, longitude },
-                                radius_km,
-                                origin_country_filter: origin_country || null,
-                                aircraft_count: 0,
-                                aircraft: []
-                            }
-                        };
-                    }
+                    return {
+                        content: [{
+                            type: "text" as const,
+                            text: summaryText
+                        }],
+                        // structuredContent is sent to UI via ui/notifications/tool-result
+                        // This data is NOT added to model context (SEP-1865 best practice)
+                        structuredContent: structuredResult
+                    };
                 } catch (error) {
                     return {
                         content: [{
