@@ -16,10 +16,10 @@
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^0.1.0",
-    "@mcp-ui/server": "^5.13.1",
-    "@modelcontextprotocol/sdk": "^1.24.1",
+    "@mcp-ui/server": "^5.16.2",
+    "@modelcontextprotocol/sdk": "^1.24.3",
     "@workos-inc/node": "^7.70.0",
-    "agents": "^0.2.14",
+    "agents": "^0.2.30",
     "hono": "^4.10.4",
     "jose": "^6.1.0",
     "pilpat-mcp-security": "^1.1.0",
