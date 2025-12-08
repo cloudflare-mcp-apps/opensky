@@ -7,7 +7,7 @@ import type { Props } from "./auth/props";
 import { checkBalance, consumeTokensWithRetry } from "./shared/tokenConsumption";
 import { formatInsufficientTokensError } from "./shared/tokenUtils";
 import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
-import { generateFlightMapTemplate } from "./optional/ui/flight-map-generator";
+import { loadHtml } from "./helpers/assets";
 import { logger } from './shared/logger';
 import {
     GetAircraftByIcaoInput,
@@ -102,8 +102,10 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                 mimeType: flightMapResource.mimeType
             },
             async () => {
-                // Return the HTML template (dynamic data comes via ui/notifications/tool-result)
-                const templateHTML = generateFlightMapTemplate();
+                // Load built widget from Cloudflare Assets binding
+                // Widget is built by Vite from web/widgets/flight-map.tsx
+                // Dynamic data comes via ui/notifications/tool-result
+                const templateHTML = await loadHtml(this.env.ASSETS, "/flight-map.html");
 
                 return {
                     contents: [{

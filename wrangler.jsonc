@@ -30,10 +30,29 @@
 
   /**
    * Build command for GitHub → Cloudflare deployment
-   * Ensures dependencies are installed before TypeScript compilation
+   * 1. Install dependencies
+   * 2. Build widget assets (Vite → single-file HTML)
+   * 3. Type-check server code
    */
   "build": {
-    "command": "npm install && npx tsc --noEmit"
+    "command": "npm install && npm run build:widgets && npx tsc --noEmit"
+  },
+
+  /**
+   * Cloudflare Assets binding for serving built widgets
+   *
+   * Widgets are built by Vite into web/dist/widgets/ as single-file HTML bundles.
+   * The ASSETS binding allows the server to serve these files via the
+   * loadHtml() helper function.
+   *
+   * Usage: loadHtml(env.ASSETS, "/flight-map.html")
+   *
+   * @see src/helpers/assets.ts
+   * @see https://developers.cloudflare.com/workers/static-assets/binding/
+   */
+  "assets": {
+    "directory": "./web/dist/widgets",
+    "binding": "ASSETS"
   },
 
   /**
@@ -180,8 +199,5 @@
    */
   "dev": {
     "port": 8787
-  },
-  "vars": {
-    "AI_GATEWAY_ID": "mcp-production-gateway"
-  },
+  }
 }

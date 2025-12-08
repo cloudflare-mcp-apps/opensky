@@ -71,8 +71,10 @@ export default {
         env: Env,
         ctx: ExecutionContext
     ): Promise<Response> {
+        let pathname: string | undefined;
         try {
             const url = new URL(request.url);
+            pathname = url.pathname;
             const authHeader = request.headers.get("Authorization");
 
             // Check for API key authentication on MCP endpoints
@@ -85,8 +87,13 @@ export default {
             return await oauthProvider.fetch(request, env, ctx);
 
         } catch (error) {
-            // Log generic errors without structured format (index.ts routing errors are rare)
-            console.error("[Dual Auth] Error:", error);
+            // Log server error with structured logging
+            logger.error({
+                event: 'server_error',
+                error: error instanceof Error ? error.message : String(error),
+                context: 'fetch_handler',
+                pathname,
+            });
             return new Response(
                 JSON.stringify({
                     error: "Internal server error",

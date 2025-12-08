@@ -63,16 +63,22 @@ export const UI_RESOURCES: Record<string, UIResourceDefinition> = {
     uri: "ui://opensky/flight-map",
     name: "flight_map",
     description:
-      "Interactive flight map showing real-time aircraft positions within a geographic search area. " +
-      "Displays aircraft markers with altitude-based color coding, heading indicators, and clickable details.",
+      "Interactive Leaflet flight map showing real-time aircraft positions within a geographic search area. " +
+      "Features: zoomable map with OpenStreetMap tiles, aircraft markers with altitude-based color coding, " +
+      "marker clustering, country/altitude filters, auto-refresh, and clickable aircraft details with tracking actions.",
     mimeType: "text/html;profile=mcp-app",
     _meta: {
       ui: {
         csp: {
           // No external API calls from UI - all data comes via MCP notifications
           connectDomains: [],
-          // No external resources needed - using inline SVG
-          resourceDomains: [],
+          // OpenStreetMap tile server for Leaflet map
+          resourceDomains: [
+            "https://tile.openstreetmap.org",
+            "https://a.tile.openstreetmap.org",
+            "https://b.tile.openstreetmap.org",
+            "https://c.tile.openstreetmap.org",
+          ],
         },
         // Request visible border since map may blend with host background
         prefersBorder: true,

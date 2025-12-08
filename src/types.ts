@@ -7,6 +7,18 @@
  * TODO: Add your custom bindings here (AI, R2, additional KV/D1, etc.)
  */
 export interface Env {
+    /**
+     * Cloudflare Assets binding for serving built widget HTML
+     *
+     * Used by loadHtml() helper to fetch pre-built React widgets
+     * from the web/dist directory. Widgets are built by Vite during
+     * deployment and bundled as single-file HTML.
+     *
+     * @see src/helpers/assets.ts
+     * @see https://developers.cloudflare.com/workers/static-assets/binding/
+     */
+    ASSETS: Fetcher;
+
     /** KV namespace for storing OAuth tokens and session data */
     OAUTH_KV: KVNamespace;
 
@@ -50,18 +62,6 @@ export interface Env {
 
     /** KV namespace for API response caching */
     CACHE_KV: KVNamespace;
-
-    /**
-     * Cloudflare AI Gateway Configuration
-     *
-     * Route all AI requests through AI Gateway for:
-     * - Authenticated access control
-     * - Rate limiting (60 requests/hour per user)
-     * - Response caching (1-hour TTL)
-     * - Analytics and monitoring
-     */
-    AI_GATEWAY_ID: string;
-    AI_GATEWAY_TOKEN: string;
 }
 
 /**
