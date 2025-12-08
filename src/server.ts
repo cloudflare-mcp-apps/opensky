@@ -93,9 +93,10 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
 
         const flightMapResource = UI_RESOURCES.flightMap;
 
+        // Register resource with correct parameter order: (name, uri, options, handler)
         this.server.registerResource(
-            flightMapResource.uri,
-            flightMapResource.name,
+            flightMapResource.name,          // name: "flight_map"
+            flightMapResource.uri,           // uri: "ui://opensky/flight-map"
             {
                 description: flightMapResource.description,
                 mimeType: flightMapResource.mimeType
