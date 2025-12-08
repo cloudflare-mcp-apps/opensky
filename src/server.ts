@@ -344,7 +344,17 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                             metadata: {
                                 title: 'Flight Map',
                                 description: `${filteredAircraftList.length} aircraft near ${latitude}, ${longitude}` +
-                                    (origin_country ? ` (filtered: ${origin_country})` : '')
+                                    (origin_country ? ` (filtered: ${origin_country})` : ''),
+                                // CSP configuration for MCP Apps hosts (SEP-1724)
+                                ui: {
+                                    csp: {
+                                        // OpenStreetMap tile servers for map rendering
+                                        resourceDomains: [
+                                            'https://*.tile.openstreetmap.org',
+                                            'https://unpkg.com'
+                                        ]
+                                    }
+                                }
                             }
                         });
 

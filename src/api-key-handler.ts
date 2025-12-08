@@ -30,6 +30,9 @@ import { checkBalance, consumeTokensWithRetry } from "./shared/tokenConsumption"
 import { formatInsufficientTokensError, formatAccountDeletedError } from "./shared/tokenUtils";
 import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
 import { generateFlightMapHTML } from "./optional/ui/flight-map-generator";
+import { TOOL_METADATA, getToolDescription } from './tools/descriptions.js';
+import { SERVER_INSTRUCTIONS } from './server-instructions.js';
+import { logger } from './shared/logger';
 
 /**
  * Simple LRU (Least Recently Used) Cache for MCP Server instances
@@ -133,7 +136,11 @@ class LRUCache<K, V> {
 
     if (oldestKey !== undefined) {
       this.cache.delete(oldestKey);
-      console.log(`🗑️  [LRU Cache] Evicted server for user: ${String(oldestKey)}`);
+      logger.info({
+        event: 'lru_cache_eviction',
+        evicted_user_id: String(oldestKey),
+        cache_size: this.cache.size,
+      });
     }
   }
 
@@ -178,14 +185,24 @@ export async function handleApiKeyRequest(
   pathname: string
 ): Promise<Response> {
   try {
-    console.log(`🔐 [API Key Auth] Request to ${pathname}`);
+    logger.info({
+      event: 'transport_request',
+      transport: pathname === '/sse' ? 'sse' : 'http',
+      method: 'api_key_auth',
+      user_email: 'pending',
+    });
 
     // 1. Extract API key from Authorization header
     const authHeader = request.headers.get("Authorization");
     const apiKey = authHeader?.replace("Bearer ", "");
 
     if (!apiKey) {
-      console.log("❌ [API Key Auth] Missing Authorization header");
+      logger.warn({
+        event: 'auth_attempt',
+        method: 'api_key',
+        success: false,
+        reason: 'missing_authorization_header',
+      });
       return jsonError("Missing Authorization header", 401);
     }
 
@@ -193,7 +210,12 @@ export async function handleApiKeyRequest(
     const userId = await validateApiKey(apiKey, env);
 
     if (!userId) {
-      console.log("❌ [API Key Auth] Invalid or expired API key");
+      logger.warn({
+        event: 'api_key_validated',
+        user_id: 'unknown',
+        key_prefix: apiKey.substring(0, 8),
+        success: false,
+      });
       return jsonError("Invalid or expired API key", 401);
     }
 
@@ -202,13 +224,22 @@ export async function handleApiKeyRequest(
 
     if (!dbUser) {
       // getUserById already checks is_deleted, so null means not found OR deleted
-      console.log(`❌ [API Key Auth] User not found or deleted: ${userId}`);
+      logger.warn({
+        event: 'user_lookup',
+        lookup_by: 'id',
+        user_id: userId,
+        found: false,
+      });
       return jsonError("User not found or account deleted", 404);
     }
 
-    console.log(
-      `✅ [API Key Auth] Authenticated user: ${dbUser.email} (${userId}), balance: ${dbUser.current_token_balance} tokens`
-    );
+    logger.info({
+      event: 'auth_attempt',
+      method: 'api_key',
+      user_email: dbUser.email,
+      user_id: userId,
+      success: true,
+    });
 
     // 4. Create or get cached MCP server with tools
     const server = await getOrCreateServer(env, userId, dbUser.email);
@@ -222,7 +253,12 @@ export async function handleApiKeyRequest(
       return jsonError("Invalid endpoint. Use /sse or /mcp", 400);
     }
   } catch (error) {
-    console.error("[API Key Auth] Error:", error);
+    logger.error({
+      event: 'server_error',
+      error: error instanceof Error ? error.message : String(error),
+      context: 'api_key_request_handler',
+      pathname,
+    });
     return jsonError(
       `Internal server error: ${error instanceof Error ? error.message : String(error)}`,
       500
@@ -256,15 +292,19 @@ async function getOrCreateServer(
   // Check cache first
   const cached = serverCache.get(userId);
   if (cached) {
-    console.log(
-      `📦 [LRU Cache] HIT for user ${userId} (cache size: ${serverCache.size}/${MAX_CACHED_SERVERS})`
-    );
+    logger.info({
+      event: 'cache_operation',
+      operation: 'hit',
+      key: `server_${userId}`,
+    });
     return cached;
   }
 
-  console.log(
-    `🔧 [LRU Cache] MISS for user ${userId} - creating new server (cache size: ${serverCache.size}/${MAX_CACHED_SERVERS})`
-  );
+  logger.info({
+    event: 'cache_operation',
+    operation: 'miss',
+    key: `server_${userId}`,
+  });
 
   // Create new MCP server
   const server = new McpServer({
@@ -292,10 +332,8 @@ async function getOrCreateServer(
   server.registerTool(
     "getAircraftByIcao",
     {
-      title: "Get Aircraft By ICAO",
-      description: "Get aircraft details by ICAO 24-bit transponder address (hex string, e.g., '3c6444'). " +
-        "This is a direct lookup - very fast and cheap. " +
-        "Returns current position, velocity, altitude, and callsign if aircraft is currently flying.",
+      title: TOOL_METADATA.getAircraftByIcao.title,
+      description: getToolDescription("getAircraftByIcao"),
       inputSchema: {
         icao24: z.string().length(6).regex(/^[0-9a-fA-F]{6}$/)
           .describe("ICAO 24-bit address (6 hex characters, e.g., '3c6444' or 'a8b2c3')"),
@@ -313,11 +351,8 @@ async function getOrCreateServer(
   server.registerTool(
     "findAircraftNearLocation",
     {
-      title: "Find Aircraft Near Location",
-      description: "Find all aircraft currently flying near a geographic location. " +
-        "Provide latitude, longitude, and search radius in kilometers. " +
-        "Server calculates the bounding box and queries for all aircraft in that area. " +
-        "Returns list of aircraft with position, velocity, altitude, callsign, and origin country.",
+      title: TOOL_METADATA.findAircraftNearLocation.title,
+      description: getToolDescription("findAircraftNearLocation"),
       inputSchema: {
         latitude: z.number().min(-90).max(90)
           .describe("Center point latitude in decimal degrees (-90 to 90, e.g., 52.2297 for Warsaw)"),
@@ -336,9 +371,11 @@ async function getOrCreateServer(
   // Cache the server (automatic LRU eviction if cache is full)
   serverCache.set(userId, server);
 
-  console.log(
-    `✅ [LRU Cache] Server created and cached for user ${userId} (cache size: ${serverCache.size}/${MAX_CACHED_SERVERS})`
-  );
+  logger.info({
+    event: 'cache_operation',
+    operation: 'set',
+    key: `server_${userId}`,
+  });
   return server;
 }
 
@@ -368,26 +405,23 @@ async function handleHTTPTransport(
   userId: string,
   userEmail: string
 ): Promise<Response> {
-  console.log(`📡 [API Key Auth] HTTP transport request from ${userEmail}`);
+  logger.info({
+    event: 'transport_request',
+    transport: 'http',
+    method: 'json_rpc',
+    user_email: userEmail,
+  });
+
+  /**
+   * Security: Token-based authentication provides primary protection
+   * - API key validation (database lookup, format check)
+   * - User account verification (is_deleted flag)
+   * - Token balance validation
+   * - Cloudflare Workers infrastructure (runs on *.workers.dev, not localhost)
+   * No origin whitelist - breaks compatibility with MCP clients (Claude, Cursor, custom clients)
+   */
 
   try {
-    // DNS Rebinding Protection: Validate origin header
-    const origin = request.headers.get('origin');
-    const ALLOWED_ORIGINS = [
-      'https://claude.ai',
-      'https://chatgpt.com',
-      'https://panel.wtyczki.ai',
-      'https://anythingllm.local'
-    ];
-
-    if (origin && !ALLOWED_ORIGINS.includes(origin)) {
-      console.warn(`[Security] Blocked request from origin: ${origin}`);
-      return jsonRpcResponse("error", null, {
-        code: -32603,
-        message: 'Request origin not allowed'
-      });
-    }
-
     // Parse JSON-RPC request
     const jsonRpcRequest = await request.json() as {
       jsonrpc: string;
@@ -396,7 +430,12 @@ async function handleHTTPTransport(
       params?: any;
     };
 
-    console.log(`📨 [HTTP] Method: ${jsonRpcRequest.method}, ID: ${jsonRpcRequest.id}`);
+    logger.info({
+      event: 'transport_request',
+      transport: 'http',
+      method: jsonRpcRequest.method,
+      user_email: userEmail,
+    });
 
     // Validate JSON-RPC 2.0 format
     if (jsonRpcRequest.jsonrpc !== "2.0") {
@@ -427,7 +466,11 @@ async function handleHTTPTransport(
         });
     }
   } catch (error) {
-    console.error("❌ [HTTP] Error:", error);
+    logger.error({
+      event: 'server_error',
+      error: error instanceof Error ? error.message : String(error),
+      context: 'http_transport_handler',
+    });
     return jsonRpcResponse("error", null, {
       code: -32700,
       message: `Parse error: ${error instanceof Error ? error.message : String(error)}`,
@@ -444,7 +487,12 @@ function handleInitialize(request: {
   method: string;
   params?: any;
 }): Response {
-  console.log("✅ [HTTP] Initialize request");
+  logger.info({
+    event: 'transport_request',
+    transport: 'http',
+    method: 'initialize',
+    user_email: 'system',
+  });
 
   return jsonRpcResponse(request.id, {
     protocolVersion: "2024-11-05",
@@ -455,6 +503,7 @@ function handleInitialize(request: {
       name: "OpenSky Flight Tracker",
       version: "1.0.0",
     },
+    instructions: SERVER_INSTRUCTIONS,
   });
 }
 
@@ -467,7 +516,12 @@ function handlePing(request: {
   method: string;
   params?: any;
 }): Response {
-  console.log("✅ [HTTP] Ping request");
+  logger.info({
+    event: 'transport_request',
+    transport: 'http',
+    method: 'ping',
+    user_email: 'system',
+  });
 
   return jsonRpcResponse(request.id, {});
 }
@@ -486,7 +540,12 @@ async function handleToolsList(
     params?: any;
   }
 ): Promise<Response> {
-  console.log("✅ [HTTP] Tools list request");
+  logger.info({
+    event: 'transport_request',
+    transport: 'http',
+    method: 'tools/list',
+    user_email: 'system',
+  });
 
   // Manually define tools since McpServer doesn't expose listTools()
   // These match the tools registered in getOrCreateServer()
@@ -579,8 +638,18 @@ async function handleToolsCall(
 
   const toolName = request.params.name;
   const toolArgs = request.params.arguments || {};
+  const actionId = crypto.randomUUID();
 
-  console.log(`🔧 [HTTP] Tool call: ${toolName} by ${userEmail}`, toolArgs);
+  logger.info({
+    event: 'tool_started',
+    tool: toolName,
+    user_email: userEmail,
+    user_id: userId,
+    action_id: actionId,
+    args: toolArgs,
+  });
+
+  const startTime = Date.now();
 
   try {
     // Execute tool logic based on tool name
@@ -599,17 +668,44 @@ async function handleToolsCall(
         break;
 
       default:
+        logger.error({
+          event: 'tool_failed',
+          tool: toolName,
+          user_email: userEmail,
+          user_id: userId,
+          action_id: actionId,
+          error: `Unknown tool: ${toolName}`,
+          error_code: 'unknown_tool',
+        });
         return jsonRpcResponse(request.id, null, {
           code: -32601,
           message: `Unknown tool: ${toolName}`,
         });
     }
 
-    console.log(`✅ [HTTP] Tool ${toolName} completed successfully`);
+    const duration_ms = Date.now() - startTime;
+    const toolCost = TOOL_METADATA[toolName as keyof typeof TOOL_METADATA]?.cost.tokens || 0;
+
+    logger.info({
+      event: 'tool_completed',
+      tool: toolName,
+      user_email: userEmail,
+      user_id: userId,
+      action_id: actionId,
+      duration_ms,
+      tokens_consumed: toolCost,
+    });
 
     return jsonRpcResponse(request.id, result);
   } catch (error) {
-    console.error(`❌ [HTTP] Tool ${toolName} failed:`, error);
+    logger.error({
+      event: 'tool_failed',
+      tool: toolName,
+      user_email: userEmail,
+      user_id: userId,
+      action_id: actionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return jsonRpcResponse(request.id, null, {
       code: -32603,
       message: `Tool execution error: ${error instanceof Error ? error.message : String(error)}`,
@@ -629,7 +725,7 @@ async function executeGetAircraftByIcaoTool(
   env: Env,
   userId: string
 ): Promise<any> {
-  const TOOL_COST = 1;
+  const TOOL_COST = TOOL_METADATA.getAircraftByIcao.cost.tokens;
   const TOOL_NAME = "getAircraftByIcao";
   const actionId = crypto.randomUUID();
 
@@ -693,7 +789,12 @@ async function executeGetAircraftByIcaoTool(
   });
 
   if (detectedPII.length > 0) {
-    console.warn(`[Security] Tool ${TOOL_NAME}: Redacted PII types:`, detectedPII);
+    logger.warn({
+      event: 'pii_redacted',
+      tool: TOOL_NAME,
+      pii_types: detectedPII,
+      count: detectedPII.length,
+    });
   }
 
   const finalResult = redacted;
@@ -724,7 +825,7 @@ async function executeFindAircraftNearLocationTool(
   env: Env,
   userId: string
 ): Promise<any> {
-  const TOOL_COST = 3;
+  const TOOL_COST = TOOL_METADATA.findAircraftNearLocation.cost.tokens;
   const TOOL_NAME = "findAircraftNearLocation";
   const actionId = crypto.randomUUID();
 
@@ -797,7 +898,12 @@ async function executeFindAircraftNearLocationTool(
   });
 
   if (detectedPII.length > 0) {
-    console.warn(`[Security] Tool ${TOOL_NAME}: Redacted PII types:`, detectedPII);
+    logger.warn({
+      event: 'pii_redacted',
+      tool: TOOL_NAME,
+      pii_types: detectedPII,
+      count: detectedPII.length,
+    });
   }
 
   const finalResult = redacted;
@@ -833,7 +939,17 @@ async function executeFindAircraftNearLocationTool(
       encoding: 'text',
       metadata: {
         title: 'Flight Map',
-        description: `${aircraftList.length} aircraft near ${args.latitude}, ${args.longitude}`
+        description: `${aircraftList.length} aircraft near ${args.latitude}, ${args.longitude}`,
+        // CSP configuration for MCP Apps hosts (SEP-1724)
+        ui: {
+          csp: {
+            // OpenStreetMap tile servers for map rendering
+            resourceDomains: [
+              'https://*.tile.openstreetmap.org',
+              'https://unpkg.com'
+            ]
+          }
+        }
       }
     });
 
@@ -896,7 +1012,12 @@ function jsonRpcResponse(
  * @returns SSE response stream
  */
 async function handleSSETransport(server: McpServer, request: Request): Promise<Response> {
-  console.log("📡 [API Key Auth] Setting up SSE transport");
+  logger.info({
+    event: 'transport_request',
+    transport: 'sse',
+    method: 'sse_setup',
+    user_email: 'system',
+  });
 
   try {
     // For Cloudflare Workers, we need to return a Response with a ReadableStream
@@ -928,7 +1049,11 @@ async function handleSSETransport(server: McpServer, request: Request): Promise<
         await writer.write(encoder.encode("event: message\n"));
         await writer.write(encoder.encode('data: {"status":"connected"}\n\n'));
 
-        console.log("✅ [API Key Auth] SSE connection established");
+        logger.info({
+          event: 'sse_connection',
+          status: 'established',
+          user_email: 'system',
+        });
 
         // Keep connection alive
         const keepAliveInterval = setInterval(async () => {
@@ -942,14 +1067,24 @@ async function handleSSETransport(server: McpServer, request: Request): Promise<
         // Note: Full MCP protocol implementation would go here
         // For MVP, we're providing basic SSE connectivity
       } catch (error) {
-        console.error("❌ [API Key Auth] SSE error:", error);
+        logger.error({
+          event: 'sse_connection',
+          status: 'error',
+          user_email: 'system',
+          error: error instanceof Error ? error.message : String(error),
+        });
         await writer.close();
       }
     })();
 
     return response;
   } catch (error) {
-    console.error("❌ [API Key Auth] SSE transport error:", error);
+    logger.error({
+      event: 'sse_connection',
+      status: 'error',
+      user_email: 'system',
+      error: error instanceof Error ? error.message : String(error),
+    });
     throw error;
   }
 }
