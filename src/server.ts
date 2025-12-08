@@ -334,6 +334,8 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                             aircraft: filteredAircraftList
                         });
 
+                        // Create UI resource with self-contained SVG map (no external dependencies)
+                        // This approach avoids CSP issues with MCP-UI iframe sandboxing
                         const uiResource = createUIResource({
                             uri: `ui://opensky/flight-map-${Date.now()}`,
                             content: {
@@ -344,17 +346,8 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                             metadata: {
                                 title: 'Flight Map',
                                 description: `${filteredAircraftList.length} aircraft near ${latitude}, ${longitude}` +
-                                    (origin_country ? ` (filtered: ${origin_country})` : ''),
-                                // CSP configuration for MCP Apps hosts (SEP-1724)
-                                ui: {
-                                    csp: {
-                                        // OpenStreetMap tile servers for map rendering
-                                        resourceDomains: [
-                                            'https://*.tile.openstreetmap.org',
-                                            'https://unpkg.com'
-                                        ]
-                                    }
-                                }
+                                    (origin_country ? ` (filtered: ${origin_country})` : '')
+                                // No CSP configuration needed - SVG map is fully self-contained
                             }
                         });
 
