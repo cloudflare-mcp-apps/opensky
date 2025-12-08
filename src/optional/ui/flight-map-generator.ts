@@ -321,7 +321,7 @@ export function generateFlightMapHTML(data: {
         showAircraftInfo(parseInt(this.dataset.index));
       });
     });
-  <\\/script>
+  </script>
 </body>
 </html>`;
 }
