@@ -222,3 +222,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Model Context Protocol](https://modelcontextprotocol.io/) for the MCP specification
 - [Cloudflare Workers](https://workers.cloudflare.com/) for edge compute platform
 - [Leaflet](https://leafletjs.com/) for interactive maps
+
