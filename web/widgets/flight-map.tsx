@@ -49,7 +49,7 @@ function FlightMapWidget() {
   const { app } = useApp({
     appInfo: {
       name: "opensky-flight-map",
-      version: "2.0.0",
+      version: "2.1.0",
     },
     capabilities: {},
     onAppCreated: (appInstance) => {
@@ -75,6 +75,12 @@ function FlightMapWidget() {
         } else if (context.theme === "light") {
           document.documentElement.classList.remove("dark");
         }
+      };
+
+      // Handle graceful teardown (v0.1.0+)
+      appInstance.onteardown = async (params) => {
+        console.log("[FlightMap] Teardown requested:", params.reason);
+        // Cleanup handled by React useEffect cleanup functions
       };
     },
   });
