@@ -1,6 +1,5 @@
 import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { OpenSkyMcp } from "./server";
-import { AuthkitHandler } from "./auth/authkit-handler";
 import { handleApiKeyRequest } from "./api-key-handler";
 import type { Env } from "./types";
 import { logger } from './shared/logger';
@@ -9,61 +8,35 @@ import { logger } from './shared/logger';
 export { OpenSkyMcp };
 
 /**
- * OpenSky Flight Tracker with Dual Authentication Support
+ * OpenSky Flight Tracker - FREE PUBLIC SERVICE
  *
- * This MCP server supports TWO authentication methods:
+ * This MCP server is completely free and open - no authentication required.
  *
- * 1. OAuth 2.1 (WorkOS AuthKit) - For OAuth-capable clients
- *    - Flow: Client → /authorize → WorkOS → Magic Auth → /callback → Tools
- *    - Used by: Claude Desktop, ChatGPT, OAuth-capable clients
- *    - Endpoints: /authorize, /callback, /token, /register
- *
- * 2. API Key Authentication - For non-OAuth clients
- *    - Flow: Client sends Authorization: Bearer wtyk_XXX → Validate → Tools
- *    - Used by: AnythingLLM, Cursor IDE, custom scripts
- *    - Endpoints: /sse, /mcp (with wtyk_ API key in header)
- *
- * MCP Endpoints (support both auth methods):
+ * MCP Endpoints:
  * - /sse - Server-Sent Events transport (for AnythingLLM, Claude Desktop)
  * - /mcp - Streamable HTTP transport (for ChatGPT and modern clients)
  *
- * OAuth Endpoints (OAuth only):
- * - /authorize - Initiates OAuth flow, redirects to WorkOS AuthKit
- * - /callback - Handles OAuth callback from WorkOS
- * - /token - Token endpoint for OAuth clients
- * - /register - Dynamic Client Registration endpoint
- *
- * Available Tools (after authentication):
- * - simpleLookup: Low-cost operation (1 token)
- * - searchAndAnalyze: Consolidated multi-step operation (2 tokens)
- *
- * TODO: Update tool descriptions above to match your actual tools
+ * Available Tools (FREE - no tokens needed):
+ * - getAircraftByIcao: Direct lookup by ICAO24 transponder address
+ * - findAircraftNearLocation: Geographic search with bounding box
  */
 
-// Create OAuthProvider instance (used when OAuth authentication is needed)
+// Create OAuthProvider instance (for McpAgent Durable Object routing)
 const oauthProvider = new OAuthProvider({
-    // Dual transport support (SSE + Streamable HTTP)
-    // This ensures compatibility with all MCP clients (Claude, ChatGPT, etc.)
     apiHandlers: {
-        '/sse': OpenSkyMcp.serveSSE('/sse'),  // Legacy SSE transport
-        '/mcp': OpenSkyMcp.serve('/mcp'),     // New Streamable HTTP transport
+        '/sse': OpenSkyMcp.serveSSE('/sse'),
+        '/mcp': OpenSkyMcp.serve('/mcp'),
     },
-
-    // OAuth authentication handler (WorkOS AuthKit integration)
-    defaultHandler: AuthkitHandler as any,
-
-    // OAuth 2.1 endpoints
+    defaultHandler: undefined as any,
     authorizeEndpoint: "/authorize",
     tokenEndpoint: "/token",
     clientRegistrationEndpoint: "/register",
 });
 
 /**
- * Custom fetch handler with dual authentication support
+ * Main fetch handler - FREE PUBLIC SERVICE
  *
- * This handler detects the authentication method and routes requests accordingly:
- * - API key (wtyk_*) → Direct API key authentication
- * - OAuth token or no auth → OAuth flow via OAuthProvider
+ * All MCP endpoints are accessible without authentication.
  */
 export default {
     async fetch(
@@ -75,19 +48,16 @@ export default {
         try {
             const url = new URL(request.url);
             pathname = url.pathname;
-            const authHeader = request.headers.get("Authorization");
 
-            // Check for API key authentication on MCP endpoints
-            if (isApiKeyRequest(url.pathname, authHeader)) {
-                // API key path detected - log and route
-                return await handleApiKeyRequest(request, env, ctx, url.pathname);
+            // Route MCP endpoints to public handler
+            if (pathname === "/sse" || pathname === "/mcp") {
+                return await handleApiKeyRequest(request, env, ctx, pathname);
             }
 
-            // Otherwise, use OAuth flow
+            // Other endpoints (for McpAgent compatibility)
             return await oauthProvider.fetch(request, env, ctx);
 
         } catch (error) {
-            // Log server error with structured logging
             logger.error({
                 event: 'server_error',
                 error: error instanceof Error ? error.message : String(error),
@@ -107,31 +77,3 @@ export default {
         }
     },
 };
-
-/**
- * Detect if request should use API key authentication
- *
- * Criteria:
- * 1. Must be an MCP endpoint (/sse or /mcp)
- * 2. Must have Authorization header with API key (starts with wtyk_)
- *
- * OAuth endpoints (/authorize, /callback, /token, /register) are NEVER intercepted.
- *
- * @param pathname - Request pathname
- * @param authHeader - Authorization header value
- * @returns true if API key request, false otherwise
- */
-function isApiKeyRequest(pathname: string, authHeader: string | null): boolean {
-    // Only intercept MCP transport endpoints
-    if (pathname !== "/sse" && pathname !== "/mcp") {
-        return false;
-    }
-
-    // Check if Authorization header contains API key
-    if (!authHeader) {
-        return false;
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    return token.startsWith("wtyk_");
-}

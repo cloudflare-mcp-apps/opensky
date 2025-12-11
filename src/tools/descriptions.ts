@@ -85,8 +85,8 @@ export const TOOL_METADATA = {
     },
 
     cost: {
-      tokens: 1,
-      rationale: "Direct lookup by primary key (ICAO24 address)",
+      tokens: 0,
+      rationale: "Free public service - no token cost",
       costFactors: undefined // Fixed cost, no variable factors
     },
 
@@ -126,9 +126,9 @@ export const TOOL_METADATA = {
     },
 
     cost: {
-      tokens: 3,
-      rationale: "Geographic bounding box calculation + multi-aircraft query",
-      costFactors: ["Search area size", "Number of results returned"]
+      tokens: 0,
+      rationale: "Free public service - no token cost",
+      costFactors: undefined
     },
 
     examples: [

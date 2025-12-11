@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flight Map - OpenSky Network</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f0f0f0;
+    }
+
+    #map {
+      height: 100vh;
+      width: 100vw;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .info-panel {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      z-index: 1000;
+      max-width: 300px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .info-panel h3 {
+      margin-bottom: 10px;
+      font-size: 16px;
+      color: #333;
+      border-bottom: 2px solid #3388ff;
+      padding-bottom: 8px;
+    }
+
+    .info-panel p {
+      margin: 5px 0;
+      color: #666;
+    }
+
+    .info-panel strong {
+      color: #333;
+    }
+
+    .legend {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      z-index: 999;
+      font-size: 12px;
+      line-height: 1.8;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 5px 0;
+    }
+
+    .legend-icon {
+      font-size: 18px;
+    }
+
+    .aircraft-marker {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+    }
+
+    .leaflet-popup-content {
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .leaflet-popup-content-wrapper {
+      border-radius: 6px;
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .popup-row {
+      margin: 6px 0;
+      display: flex;
+      justify-content: space-between;
+      gap: 15px;
+    }
+
+    .popup-label {
+      font-weight: 600;
+      color: #333;
+    }
+
+    .popup-value {
+      color: #666;
+      text-align: right;
+    }
+
+    .no-data {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      text-align: center;
+      z-index: 999;
+    }
+
+    .no-data h2 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .no-data p {
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="info-panel">
+    <h3>🛫 Flight Search</h3>
+    <p>
+      <strong>Center:</strong><br>
+      52.2297°, 21.0122°
+    </p>
+    <p>
+      <strong>Radius:</strong> 25 km
+    </p>
+    <p>
+      <strong>Aircraft Found:</strong> <span id="aircraft-count">3</span>
+    </p>
+    <p style="font-size: 12px; color: #999; margin-top: 10px;">
+      Click markers for details
+    </p>
+  </div>
+
+  <div class="legend">
+    <div style="font-weight: 600; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
+      Legend
+    </div>
+    <div class="legend-item">
+      <span class="legend-icon">✈️</span>
+      <span>Aircraft</span>
+    </div>
+    <div class="legend-item">
+      <span style="color: #3388ff; font-size: 16px;">⭕</span>
+      <span>Search radius</span>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Aircraft data injected from server
+    const aircraftData = [{"icao24":"3c6444","callsign":"LOT456","origin_country":"Poland","position":{"latitude":52.23,"longitude":21.01,"altitude_m":10668,"on_ground":false},"velocity":{"ground_speed_ms":240.5,"vertical_rate_ms":5.2,"true_track_deg":85.3},"last_contact":1732118400,"squawk":"2000"},{"icao24":"abc123","callsign":"RYR789","origin_country":"Ireland","position":{"latitude":52.25,"longitude":21.05,"altitude_m":8000,"on_ground":false},"velocity":{"ground_speed_ms":220,"vertical_rate_ms":-2.1,"true_track_deg":180},"last_contact":1732118395,"squawk":"1000"},{"icao24":"def456","callsign":"BAW123","origin_country":"United Kingdom","position":{"latitude":52.2,"longitude":20.95,"altitude_m":12000,"on_ground":false},"velocity":{"ground_speed_ms":280,"vertical_rate_ms":3.5,"true_track_deg":270},"last_contact":1732118390,"squawk":"5000"}];
+    const centerLat = 52.2297;
+    const centerLon = 21.0122;
+    const radiusKm = 25;
+
+    // Initialize map
+    const map = L.map('map').setView([centerLat, centerLon], 9);
+
+    // Add OpenStreetMap tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19,
+      maxNativeZoom: 18
+    }).addTo(map);
+
+    // Add search radius circle
+    L.circle([centerLat, centerLon], {
+      radius: radiusKm * 1000, // Convert km to meters
+      color: '#3388ff',
+      fillColor: '#3388ff',
+      fillOpacity: 0.1,
+      weight: 2,
+      dashArray: '5, 5'
+    }).addTo(map);
+
+    // Add center point marker
+    L.circleMarker([centerLat, centerLon], {
+      radius: 6,
+      fillColor: '#ff7800',
+      color: '#fff',
+      weight: 2,
+      opacity: 1,
+      fillOpacity: 0.8
+    }).addTo(map).bindPopup('<b>Search Center</b>');
+
+    // Helper function to get altitude color
+    function getAltitudeColor(altitude) {
+      if (altitude === null || altitude === undefined) return '#95b8d1';
+      if (altitude <= 300) return '#d4353d'; // Red - low altitude
+      if (altitude <= 3000) return '#f58220'; // Orange - low-medium
+      if (altitude <= 6000) return '#fac858'; // Yellow - medium
+      if (altitude <= 9000) return '#5eaed8'; // Light blue - medium-high
+      return '#1f77b4'; // Dark blue - high altitude (cruise)
+    }
+
+    // Helper function to get altitude label
+    function getAltitudeLabel(altitude) {
+      if (altitude === null || altitude === undefined) return 'Unknown';
+      if (altitude <= 300) return 'Ground/Low';
+      if (altitude <= 3000) return 'Low';
+      if (altitude <= 6000) return 'Medium';
+      if (altitude <= 9000) return 'High';
+      return 'Cruise';
+    }
+
+    // Add aircraft markers
+    let validAircraft = 0;
+    aircraftData.forEach((aircraft) => {
+      if (aircraft.position.latitude && aircraft.position.longitude) {
+        validAircraft++;
+
+        const lat = aircraft.position.latitude;
+        const lon = aircraft.position.longitude;
+        const alt = aircraft.position.altitude_m;
+        const heading = aircraft.velocity.true_track_deg ?? 0;
+        const speed = aircraft.velocity.ground_speed_ms ?? 0;
+        const speedKmh = Math.round(speed * 3.6);
+
+        // Create custom aircraft marker with rotation
+        const airplaneIcon = L.divIcon({
+          html: `<div style="
+            transform: rotate(${heading}deg);
+            font-size: 28px;
+            filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.3));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          ">✈️</div>`,
+          className: 'aircraft-marker',
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+          popupAnchor: [0, -20]
+        });
+
+        const marker = L.marker([lat, lon], { icon: airplaneIcon }).addTo(map);
+
+        // Create detailed popup content
+        const popupContent = `
+          <div style="font-size: 13px;">
+            <div style="font-weight: 700; font-size: 14px; margin-bottom: 8px; color: #333;">
+              ${aircraft.callsign || 'Unknown'}
+            </div>
+            <div class="popup-row">
+              <span class="popup-label">ICAO24:</span>
+              <span class="popup-value">${aircraft.icao24}</span>
+            </div>
+            <div class="popup-row">
+              <span class="popup-label">Country:</span>
+              <span class="popup-value">${aircraft.origin_country}</span>
+            </div>
+            <div class="popup-row">
+              <span class="popup-label">Altitude:</span>
+              <span class="popup-value">${alt ? (alt + ' m') : 'N/A'}</span>
+            </div>
+            <div class="popup-row">
+              <span class="popup-label">Speed:</span>
+              <span class="popup-value">${speedKmh} km/h</span>
+            </div>
+            <div class="popup-row">
+              <span class="popup-label">Heading:</span>
+              <span class="popup-value">${heading.toFixed(1)}°</span>
+            </div>
+            <div class="popup-row">
+              <span class="popup-label">Vert. Rate:</span>
+              <span class="popup-value">${aircraft.velocity.vertical_rate_ms !== null ? (aircraft.velocity.vertical_rate_ms.toFixed(1) + ' m/s') : 'N/A'}</span>
+            </div>
+            <div class="popup-row">
+              <span class="popup-label">Status:</span>
+              <span class="popup-value">${aircraft.position.on_ground ? 'On Ground' : 'In Flight'}</span>
+            </div>
+          </div>
+        `;
+
+        marker.bindPopup(popupContent, {
+          maxWidth: 250,
+          className: 'aircraft-popup'
+        });
+      }
+    });
+
+    // Update aircraft count display
+    document.getElementById('aircraft-count').textContent = validAircraft;
+
+    // Show message if no aircraft found
+    if (validAircraft === 0) {
+      const noDataDiv = document.createElement('div');
+      noDataDiv.className = 'no-data';
+      noDataDiv.innerHTML = `
+        <h2>No Aircraft Found</h2>
+        <p>No aircraft are currently flying in this area.</p>
+        <p style="font-size: 12px; color: #999; margin-top: 10px;">Search radius: ${radiusKm} km</p>
+      `;
+      document.body.appendChild(noDataDiv);
+    }
+
+    // Fit map bounds to show all markers with some padding
+    if (validAircraft > 0) {
+      const bounds = L.latLngBounds([centerLat, centerLon], [centerLat, centerLon]);
+      aircraftData.forEach((aircraft) => {
+        if (aircraft.position.latitude && aircraft.position.longitude) {
+          bounds.extend([aircraft.position.latitude, aircraft.position.longitude]);
+        }
+      });
+      // Add padding by expanding bounds
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 11 });
+    }
+  </script>
+</body>
+</html>

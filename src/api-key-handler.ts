@@ -1,16 +1,16 @@
 /**
- * API Key Authentication Handler for OpenSky Flight Tracker
+ * Public API Handler for OpenSky Flight Tracker
  *
- * This module provides API key authentication support for MCP clients that don't support
- * OAuth flows (like AnythingLLM, Cursor IDE, custom scripts).
+ * This is a FREE PUBLIC SERVICE - no authentication required.
  *
- * Authentication flow:
- * 1. Extract API key from Authorization header
- * 2. Validate key using validateApiKey()
- * 3. Get user from database
- * 4. Create MCP server with tools
- * 5. Handle MCP protocol request
- * 6. Return response
+ * This module handles MCP protocol requests for all clients (Claude Desktop,
+ * AnythingLLM, Cursor IDE, custom scripts) without any authentication.
+ *
+ * Request flow:
+ * 1. Receive MCP protocol request
+ * 2. Create MCP server with tools
+ * 3. Execute tool
+ * 4. Return response
  *
  * TODO: When you add new tools to server.ts, you MUST also:
  * 1. Register them in getOrCreateServer() (around line 260)
@@ -19,14 +19,10 @@
  * 4. Add tool schemas to handleToolsList() (around line 625)
  */
 
-import { validateApiKey } from "./auth/apiKeys";
-import { getUserById } from "./shared/tokenUtils";
 import type { Env, State } from "./types";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { OpenSkyClient } from "./api-client";
-import { checkBalance, consumeTokensWithRetry } from "./shared/tokenConsumption";
-import { formatInsufficientTokensError, formatAccountDeletedError } from "./shared/tokenUtils";
 import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
 import { TOOL_METADATA, getToolDescription } from './tools/descriptions.js';
 import { SERVER_INSTRUCTIONS } from './server-instructions.js';
@@ -169,7 +165,9 @@ const MAX_CACHED_SERVERS = 1000;
 const serverCache = new LRUCache<string, McpServer>(MAX_CACHED_SERVERS);
 
 /**
- * Main entry point for API key authenticated MCP requests
+ * Main entry point for public MCP requests (no authentication required)
+ *
+ * This is a FREE PUBLIC SERVICE - no API key or authentication needed.
  *
  * @param request - Incoming HTTP request
  * @param env - Cloudflare Workers environment
@@ -187,67 +185,18 @@ export async function handleApiKeyRequest(
     logger.info({
       event: 'transport_request',
       transport: pathname === '/sse' ? 'sse' : 'http',
-      method: 'api_key_auth',
-      user_email: 'pending',
+      method: 'public_access',
+      user_email: 'anonymous',
     });
 
-    // 1. Extract API key from Authorization header
-    const authHeader = request.headers.get("Authorization");
-    const apiKey = authHeader?.replace("Bearer ", "");
+    // Create or get cached MCP server with tools (no auth needed)
+    const server = await getOrCreateServer(env);
 
-    if (!apiKey) {
-      logger.warn({
-        event: 'auth_attempt',
-        method: 'api_key',
-        success: false,
-        reason: 'missing_authorization_header',
-      });
-      return jsonError("Missing Authorization header", 401);
-    }
-
-    // 2. Validate API key and get user_id
-    const userId = await validateApiKey(apiKey, env);
-
-    if (!userId) {
-      logger.warn({
-        event: 'api_key_validated',
-        user_id: 'unknown',
-        key_prefix: apiKey.substring(0, 8),
-        success: false,
-      });
-      return jsonError("Invalid or expired API key", 401);
-    }
-
-    // 3. Get user from database
-    const dbUser = await getUserById(env.TOKEN_DB, userId);
-
-    if (!dbUser) {
-      // getUserById already checks is_deleted, so null means not found OR deleted
-      logger.warn({
-        event: 'user_lookup',
-        lookup_by: 'id',
-        user_id: userId,
-        found: false,
-      });
-      return jsonError("User not found or account deleted", 404);
-    }
-
-    logger.info({
-      event: 'auth_attempt',
-      method: 'api_key',
-      user_email: dbUser.email,
-      user_id: userId,
-      success: true,
-    });
-
-    // 4. Create or get cached MCP server with tools
-    const server = await getOrCreateServer(env, userId, dbUser.email);
-
-    // 5. Handle the MCP request using the appropriate transport
+    // Handle the MCP request using the appropriate transport
     if (pathname === "/sse") {
       return await handleSSETransport(server, request);
     } else if (pathname === "/mcp") {
-      return await handleHTTPTransport(server, request, env, userId, dbUser.email);
+      return await handleHTTPTransport(server, request, env);
     } else {
       return jsonError("Invalid endpoint. Use /sse or /mcp", 400);
     }
@@ -255,7 +204,7 @@ export async function handleApiKeyRequest(
     logger.error({
       event: 'server_error',
       error: error instanceof Error ? error.message : String(error),
-      context: 'api_key_request_handler',
+      context: 'public_request_handler',
       pathname,
     });
     return jsonError(
@@ -266,35 +215,30 @@ export async function handleApiKeyRequest(
 }
 
 /**
- * Get or create MCP server instance for API key user
+ * Get or create MCP server instance (public - no auth)
  *
  * This creates a standalone MCP server (not using McpAgent) with all tools.
- * The server instance is cached per user to avoid recreating it on every request.
+ * The server instance is cached globally to avoid recreating it on every request.
  *
  * Cache behavior:
  * - Cache hit: Returns existing server immediately (~1ms)
  * - Cache miss: Creates new server (~10-50ms), then caches it
- * - Cache full: Evicts least recently used server automatically
  *
  * TODO: When you add new tools to server.ts, you MUST add them here too!
  *
  * @param env - Cloudflare Workers environment
- * @param userId - User ID for token management
- * @param email - User email for logging
  * @returns Configured MCP server instance
  */
-async function getOrCreateServer(
-  env: Env,
-  userId: string,
-  email: string
-): Promise<McpServer> {
+async function getOrCreateServer(env: Env): Promise<McpServer> {
+  const CACHE_KEY = "public_server";
+
   // Check cache first
-  const cached = serverCache.get(userId);
+  const cached = serverCache.get(CACHE_KEY);
   if (cached) {
     logger.info({
       event: 'cache_operation',
       operation: 'hit',
-      key: `server_${userId}`,
+      key: CACHE_KEY,
     });
     return cached;
   }
@@ -302,17 +246,17 @@ async function getOrCreateServer(
   logger.info({
     event: 'cache_operation',
     operation: 'miss',
-    key: `server_${userId}`,
+    key: CACHE_KEY,
   });
 
   // Create new MCP server
   const server = new McpServer({
-    name: "OpenSky Flight Tracker (API Key)",
+    name: "OpenSky Flight Tracker (Public)",
     version: "1.0.0",
   });
 
   // Initialize OpenSky API client with local state management
-  // Note: In API key path, state is not persisted across requests
+  // Note: State is not persisted across requests
   // Each request gets a fresh token if needed
   const localState: State = {
     opensky_access_token: null,
@@ -326,7 +270,7 @@ async function getOrCreateServer(
   const openskyClient = new OpenSkyClient(env, localState, setLocalState);
 
   // ========================================================================
-  // Tool 1: Get Aircraft by ICAO24 (1 token cost)
+  // Tool 1: Get Aircraft by ICAO24 (FREE)
   // ========================================================================
   server.registerTool(
     "getAircraftByIcao",
@@ -345,7 +289,7 @@ async function getOrCreateServer(
   );
 
   // ========================================================================
-  // Tool 2: Find Aircraft Near Location (3 tokens cost)
+  // Tool 2: Find Aircraft Near Location (FREE)
   // ========================================================================
   server.registerTool(
     "findAircraftNearLocation",
@@ -367,13 +311,13 @@ async function getOrCreateServer(
     }
   );
 
-  // Cache the server (automatic LRU eviction if cache is full)
-  serverCache.set(userId, server);
+  // Cache the server
+  serverCache.set(CACHE_KEY, server);
 
   logger.info({
     event: 'cache_operation',
     operation: 'set',
-    key: `server_${userId}`,
+    key: CACHE_KEY,
   });
   return server;
 }
@@ -384,6 +328,8 @@ async function getOrCreateServer(
  * Streamable HTTP is the modern MCP transport protocol that replaced SSE.
  * It uses standard HTTP POST requests with JSON-RPC 2.0 protocol.
  *
+ * This is a FREE PUBLIC SERVICE - no authentication required.
+ *
  * Supported JSON-RPC methods:
  * - initialize: Protocol handshake and capability negotiation
  * - ping: Health check (required by AnythingLLM)
@@ -393,32 +339,19 @@ async function getOrCreateServer(
  * @param server - Configured MCP server instance
  * @param request - Incoming HTTP POST request with JSON-RPC message
  * @param env - Cloudflare Workers environment
- * @param userId - User ID for logging
- * @param userEmail - User email for logging
  * @returns JSON-RPC response
  */
 async function handleHTTPTransport(
   server: McpServer,
   request: Request,
-  env: Env,
-  userId: string,
-  userEmail: string
+  env: Env
 ): Promise<Response> {
   logger.info({
     event: 'transport_request',
     transport: 'http',
     method: 'json_rpc',
-    user_email: userEmail,
+    user_email: 'anonymous',
   });
-
-  /**
-   * Security: Token-based authentication provides primary protection
-   * - API key validation (database lookup, format check)
-   * - User account verification (is_deleted flag)
-   * - Token balance validation
-   * - Cloudflare Workers infrastructure (runs on *.workers.dev, not localhost)
-   * No origin whitelist - breaks compatibility with MCP clients (Claude, Cursor, custom clients)
-   */
 
   try {
     // Parse JSON-RPC request
@@ -433,7 +366,7 @@ async function handleHTTPTransport(
       event: 'transport_request',
       transport: 'http',
       method: jsonRpcRequest.method,
-      user_email: userEmail,
+      user_email: 'anonymous',
     });
 
     // Validate JSON-RPC 2.0 format
@@ -456,7 +389,7 @@ async function handleHTTPTransport(
         return await handleToolsList(server, jsonRpcRequest);
 
       case "tools/call":
-        return await handleToolsCall(server, jsonRpcRequest, env, userId, userEmail);
+        return await handleToolsCall(server, jsonRpcRequest, env);
 
       default:
         return jsonRpcResponse(jsonRpcRequest.id, null, {
@@ -611,6 +544,8 @@ async function handleToolsList(
 /**
  * Handle tools/call request (execute a tool)
  *
+ * This is a FREE PUBLIC SERVICE - no authentication required.
+ *
  * LOCATION 3 of 4: Switch statement for tool routing
  */
 async function handleToolsCall(
@@ -624,9 +559,7 @@ async function handleToolsCall(
       arguments?: Record<string, any>;
     };
   },
-  env: Env,
-  userId: string,
-  userEmail: string
+  env: Env
 ): Promise<Response> {
   if (!request.params || !request.params.name) {
     return jsonRpcResponse(request.id, null, {
@@ -642,8 +575,8 @@ async function handleToolsCall(
   logger.info({
     event: 'tool_started',
     tool: toolName,
-    user_email: userEmail,
-    user_id: userId,
+    user_email: 'anonymous',
+    user_id: 'public',
     action_id: actionId,
     args: toolArgs,
   });
@@ -651,27 +584,24 @@ async function handleToolsCall(
   const startTime = Date.now();
 
   try {
-    // Execute tool logic based on tool name
-    // This duplicates the logic from getOrCreateServer() but is necessary
-    // because McpServer doesn't expose a way to call tools directly
+    // Execute tool logic based on tool name (FREE - no auth or token checks)
 
     let result: any;
 
     switch (toolName) {
       case "getAircraftByIcao":
-        result = await executeGetAircraftByIcaoTool(toolArgs, env, userId);
+        result = await executeGetAircraftByIcaoTool(toolArgs, env);
         break;
 
       case "findAircraftNearLocation":
-        result = await executeFindAircraftNearLocationTool(toolArgs, env, userId);
+        result = await executeFindAircraftNearLocationTool(toolArgs, env);
         break;
 
       default:
         logger.error({
           event: 'tool_failed',
           tool: toolName,
-          user_email: userEmail,
-          user_id: userId,
+          user_email: 'anonymous',
           action_id: actionId,
           error: `Unknown tool: ${toolName}`,
           error_code: 'unknown_tool',
@@ -683,16 +613,15 @@ async function handleToolsCall(
     }
 
     const duration_ms = Date.now() - startTime;
-    const toolCost = TOOL_METADATA[toolName as keyof typeof TOOL_METADATA]?.cost.tokens || 0;
 
     logger.info({
       event: 'tool_completed',
       tool: toolName,
-      user_email: userEmail,
-      user_id: userId,
+      user_email: 'anonymous',
+      user_id: 'public',
       action_id: actionId,
       duration_ms,
-      tokens_consumed: toolCost,
+      tokens_consumed: 0,
     });
 
     return jsonRpcResponse(request.id, result);
@@ -700,8 +629,8 @@ async function handleToolsCall(
     logger.error({
       event: 'tool_failed',
       tool: toolName,
-      user_email: userEmail,
-      user_id: userId,
+      user_email: 'anonymous',
+      user_id: 'public',
       action_id: actionId,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -713,41 +642,17 @@ async function handleToolsCall(
 }
 
 /**
- * LOCATION 4 of 4: Tool execution functions
+ * LOCATION 4 of 4: Tool execution functions (FREE - no auth or tokens)
  */
 
 /**
- * Execute getAircraftByIcao tool (1 token)
+ * Execute getAircraftByIcao tool (FREE)
  */
 async function executeGetAircraftByIcaoTool(
   args: Record<string, any>,
-  env: Env,
-  userId: string
+  env: Env
 ): Promise<any> {
-  const TOOL_COST = TOOL_METADATA.getAircraftByIcao.cost.tokens;
   const TOOL_NAME = "getAircraftByIcao";
-  const actionId = crypto.randomUUID();
-
-  const balanceCheck = await checkBalance(env.TOKEN_DB, userId, TOOL_COST);
-
-  if (balanceCheck.userDeleted) {
-    return {
-      content: [{ type: "text" as const, text: formatAccountDeletedError(TOOL_NAME) }],
-      isError: true,
-    };
-  }
-
-  if (!balanceCheck.sufficient) {
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: formatInsufficientTokensError(TOOL_NAME, balanceCheck.currentBalance, TOOL_COST),
-        },
-      ],
-      isError: true,
-    };
-  }
 
   // Initialize OpenSky client
   const localState: State = {
@@ -759,14 +664,14 @@ async function executeGetAircraftByIcaoTool(
   };
   const openskyClient = new OpenSkyClient(env, localState, setLocalState);
 
-  // Execute tool logic
+  // Execute tool logic (FREE - no auth or token checks)
   const aircraft = await openskyClient.getAircraftByIcao(args.icao24);
 
   const result = aircraft
     ? JSON.stringify(aircraft, null, 2)
     : `No aircraft found with ICAO24: ${args.icao24} (aircraft may not be currently flying)`;
 
-  // ⭐ Step 4.5: Security Processing
+  // Security Processing
   const sanitized = sanitizeOutput(result, {
     removeHtml: true,
     removeControlChars: true,
@@ -797,19 +702,6 @@ async function executeGetAircraftByIcaoTool(
   }
 
   const finalResult = redacted;
-  // ⭐ End of Step 4.5
-
-  await consumeTokensWithRetry(
-    env.TOKEN_DB,
-    userId,
-    TOOL_COST,
-    "opensky",
-    TOOL_NAME,
-    args,
-    finalResult,
-    true,
-    actionId
-  );
 
   return {
     content: [{ type: "text" as const, text: finalResult }],
@@ -817,37 +709,13 @@ async function executeGetAircraftByIcaoTool(
 }
 
 /**
- * Execute findAircraftNearLocation tool (3 tokens)
+ * Execute findAircraftNearLocation tool (FREE)
  */
 async function executeFindAircraftNearLocationTool(
   args: Record<string, any>,
-  env: Env,
-  userId: string
+  env: Env
 ): Promise<any> {
-  const TOOL_COST = TOOL_METADATA.findAircraftNearLocation.cost.tokens;
   const TOOL_NAME = "findAircraftNearLocation";
-  const actionId = crypto.randomUUID();
-
-  const balanceCheck = await checkBalance(env.TOKEN_DB, userId, TOOL_COST);
-
-  if (balanceCheck.userDeleted) {
-    return {
-      content: [{ type: "text" as const, text: formatAccountDeletedError(TOOL_NAME) }],
-      isError: true,
-    };
-  }
-
-  if (!balanceCheck.sufficient) {
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: formatInsufficientTokensError(TOOL_NAME, balanceCheck.currentBalance, TOOL_COST),
-        },
-      ],
-      isError: true,
-    };
-  }
 
   // Initialize OpenSky client
   const localState: State = {
@@ -859,7 +727,7 @@ async function executeFindAircraftNearLocationTool(
   };
   const openskyClient = new OpenSkyClient(env, localState, setLocalState);
 
-  // Execute tool logic
+  // Execute tool logic (FREE - no auth or token checks)
   const aircraftList = await openskyClient.findAircraftNearLocation(
     args.latitude,
     args.longitude,
@@ -875,7 +743,7 @@ async function executeFindAircraftNearLocationTool(
       }, null, 2)
     : `No aircraft currently flying within ${args.radius_km}km of (${args.latitude}, ${args.longitude})`;
 
-  // ⭐ Step 4.5: Security Processing
+  // Security Processing
   const sanitized = sanitizeOutput(result, {
     removeHtml: true,
     removeControlChars: true,
@@ -905,25 +773,7 @@ async function executeFindAircraftNearLocationTool(
     });
   }
 
-  const finalResult = redacted;
-  // ⭐ End of Step 4.5
-
-  await consumeTokensWithRetry(
-    env.TOKEN_DB,
-    userId,
-    TOOL_COST,
-    "opensky",
-    TOOL_NAME,
-    args,
-    finalResult,
-    true,
-    actionId
-  );
-
   // SEP-1865: Return structuredContent for UI rendering via notifications
-  // API key path doesn't have capability negotiation, so we return text + structuredContent
-  // Hosts that support SEP-1865 will use _meta["ui/resourceUri"] from tool definition
-
   const structuredResult = {
     search_center: { latitude: args.latitude, longitude: args.longitude },
     radius_km: args.radius_km,

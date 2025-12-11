@@ -3,9 +3,6 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { OpenSkyClient } from "./api-client";
 import type { Env, State } from "./types";
-import type { Props } from "./auth/props";
-import { checkBalance, consumeTokensWithRetry } from "./shared/tokenConsumption";
-import { formatInsufficientTokensError } from "./shared/tokenUtils";
 import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
 import { loadHtml } from "./helpers/assets";
 import { logger } from './shared/logger';
@@ -30,25 +27,17 @@ import {
  * Provides real-time aircraft tracking via the OpenSky Network API.
  * Uses OAuth2 client credentials flow with automatic 30-minute token refresh.
  *
- * Generic type parameters:
- * - Env: Cloudflare Workers environment bindings (KV, D1, WorkOS, OpenSky credentials)
- * - State: Durable Object state for OAuth token storage (access_token, expires_at)
- * - Props: Authenticated user context from WorkOS (userId, email from database)
+ * This is a FREE PUBLIC SERVICE - no authentication or tokens required.
  *
- * Authentication flow:
- * 1. User connects via MCP client
- * 2. Redirected to centralized login at panel.wtyczki.ai/auth/login-custom
- * 3. User enters email → receives Magic Auth code
- * 4. Session validated from shared USER_SESSIONS KV
- * 5. Database check: user exists and is_deleted = false
- * 6. If valid → Access granted, user info available via this.props
- * 7. All tools check token balance before execution
+ * Generic type parameters:
+ * - Env: Cloudflare Workers environment bindings (KV, OpenSky credentials)
+ * - State: Durable Object state for OAuth token storage (access_token, expires_at)
  *
  * Tools:
- * - findAircraftNearLocation (3 tokens): Geographic search with bounding box
- * - getAircraftByIcao (1 token): Direct lookup by ICAO24 transponder address
+ * - findAircraftNearLocation: Geographic search with bounding box
+ * - getAircraftByIcao: Direct lookup by ICAO24 transponder address
  */
-export class OpenSkyMcp extends McpAgent<Env, State, Props> {
+export class OpenSkyMcp extends McpAgent<Env, State> {
     server = new McpServer(
         {
             name: "OpenSky Flight Tracker",
@@ -125,10 +114,9 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
         });
 
         // ========================================================================
-        // Tool 1: Get Aircraft by ICAO24 (1 token cost)
+        // Tool 1: Get Aircraft by ICAO24 (FREE)
         // ========================================================================
         // Direct lookup by ICAO 24-bit transponder address
-        // Very cheap operation (1 OpenSky API credit)
         this.server.registerTool(
             "getAircraftByIcao",
             {
@@ -138,41 +126,17 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                 outputSchema: GetAircraftByIcaoOutputSchema,
             },
             async ({ icao24 }) => {
-                const TOOL_COST = TOOL_METADATA.getAircraftByIcao.cost.tokens;
                 const TOOL_NAME = "getAircraftByIcao";
 
-                // 0. Pre-generate action_id for idempotency
-                const actionId = crypto.randomUUID();
-
                 try {
-                    // 1. Get user ID from props
-                    const userId = this.props?.userId;
-                    if (!userId) {
-                        throw new Error("User ID not found in authentication context");
-                    }
-
-                    // 2. Check token balance
-                    const balanceCheck = await checkBalance(this.env.TOKEN_DB, userId, TOOL_COST);
-
-                    // 3. Handle insufficient balance
-                    if (!balanceCheck.sufficient) {
-                        return {
-                            content: [{
-                                type: "text" as const,
-                                text: formatInsufficientTokensError(TOOL_NAME, balanceCheck.currentBalance, TOOL_COST)
-                            }],
-                            isError: true
-                        };
-                    }
-
-                    // 4. Execute tool logic
+                    // Execute tool logic (FREE - no auth or token checks)
                     const aircraft = await openskyClient.getAircraftByIcao(icao24);
 
                     const result = aircraft
                         ? JSON.stringify(aircraft, null, 2)
                         : `No aircraft found with ICAO24: ${icao24} (aircraft may not be currently flying)`;
 
-                    // ⭐ Step 4.5: Security Processing
+                    // Security Processing
                     const sanitized = sanitizeOutput(result, {
                         removeHtml: true,
                         removeControlChars: true,
@@ -203,22 +167,8 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                     }
 
                     const finalResult = redacted;
-                    // ⭐ End of Step 4.5
 
-                    // 5. Consume tokens WITH RETRY and idempotency protection
-                    await consumeTokensWithRetry(
-                        this.env.TOKEN_DB,
-                        userId,
-                        TOOL_COST,
-                        "opensky",
-                        TOOL_NAME,
-                        { icao24 },
-                        finalResult,
-                        true,
-                        actionId
-                    );
-
-                    // 6. Return result
+                    // Return result
                     return {
                         content: [{
                             type: "text" as const,
@@ -239,10 +189,9 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
         );
 
         // ========================================================================
-        // Tool 2: Find Aircraft Near Location (3 tokens cost)
+        // Tool 2: Find Aircraft Near Location (FREE)
         // ========================================================================
         // Geographic search using bounding box calculation
-        // Credit usage: 1-3 OpenSky API credits depending on area size
         this.server.registerTool(
             "findAircraftNearLocation",
             {
@@ -258,34 +207,10 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                 },
             },
             async ({ latitude, longitude, radius_km, origin_country }) => {
-                const TOOL_COST = TOOL_METADATA.findAircraftNearLocation.cost.tokens;
                 const TOOL_NAME = "findAircraftNearLocation";
 
-                // 0. Pre-generate action_id for idempotency
-                const actionId = crypto.randomUUID();
-
                 try {
-                    // 1. Get user ID
-                    const userId = this.props?.userId;
-                    if (!userId) {
-                        throw new Error("User ID not found in authentication context");
-                    }
-
-                    // 2. Check token balance
-                    const balanceCheck = await checkBalance(this.env.TOKEN_DB, userId, TOOL_COST);
-
-                    // 3. Handle insufficient balance
-                    if (!balanceCheck.sufficient) {
-                        return {
-                            content: [{
-                                type: "text" as const,
-                                text: formatInsufficientTokensError(TOOL_NAME, balanceCheck.currentBalance, TOOL_COST)
-                            }],
-                            isError: true
-                        };
-                    }
-
-                    // 4. Execute tool logic
+                    // Execute tool logic (FREE - no auth or token checks)
                     const aircraftList = await openskyClient.findAircraftNearLocation(
                         latitude,
                         longitude,
@@ -318,7 +243,7 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                         : `No aircraft currently flying within ${radius_km}km of (${latitude}, ${longitude})` +
                           (origin_country ? ` with origin_country: ${origin_country}` : '');
 
-                    // ⭐ Step 4.5: Security Processing
+                    // Security Processing
                     const sanitized = sanitizeOutput(result, {
                         removeHtml: true,
                         removeControlChars: true,
@@ -349,22 +274,8 @@ export class OpenSkyMcp extends McpAgent<Env, State, Props> {
                     }
 
                     const finalResult = redacted;
-                    // ⭐ End of Step 4.5
 
-                    // 5. Consume tokens
-                    await consumeTokensWithRetry(
-                        this.env.TOKEN_DB,
-                        userId,
-                        TOOL_COST,
-                        "opensky",
-                        TOOL_NAME,
-                        { latitude, longitude, radius_km },
-                        finalResult,
-                        true,
-                        actionId
-                    );
-
-                    // 6. Return result with structuredContent for SEP-1865 UI rendering
+                    // Return result with structuredContent for SEP-1865 UI rendering
                     // Host will:
                     // 1. Fetch the UI resource template via resources/read
                     // 2. Send tool input via ui/notifications/tool-input

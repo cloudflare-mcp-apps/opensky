@@ -1,9 +1,28 @@
 {
-  "name": "opensky",
+  "name": "opensky-mcp",
   "version": "1.0.0",
-  "description": "OpenSky Network MCP server with interactive flight map widget",
-  "private": true,
+  "description": "Free, open-source MCP server for real-time aircraft tracking via OpenSky Network API. Track flights by ICAO code or search aircraft near any location.",
+  "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pilpat/open-sky.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pilpat/open-sky/issues"
+  },
+  "homepage": "https://github.com/pilpat/open-sky#readme",
+  "keywords": [
+    "mcp",
+    "opensky",
+    "flight-tracker",
+    "aircraft",
+    "cloudflare-workers",
+    "model-context-protocol",
+    "aviation",
+    "real-time",
+    "api"
+  ],
   "overrides": {
     "iron-session": {
       "cookie": "^0.7.0"
@@ -24,11 +43,9 @@
     "@modelcontextprotocol/sdk": "^1.24.3",
     "@types/leaflet": "^1.9.21",
     "@types/leaflet.markercluster": "^1.5.6",
-    "@workos-inc/node": "^7.70.0",
     "agents": "^0.2.30",
     "clsx": "^2.1.1",
     "hono": "^4.10.4",
-    "jose": "^6.1.0",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
     "pilpat-mcp-security": "^1.1.0",
