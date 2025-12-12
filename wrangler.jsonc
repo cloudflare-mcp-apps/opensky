@@ -13,7 +13,7 @@
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "opensky-mcp",
+  "name": "opensky",
   "main": "src/index.ts",
   "compatibility_date": "2025-03-10",
   "compatibility_flags": ["nodejs_compat"],

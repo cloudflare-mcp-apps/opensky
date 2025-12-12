@@ -1,5 +1,5 @@
 {
-  "name": "opensky-mcp",
+  "name": "opensky",
   "version": "1.0.0",
   "description": "Free, open-source MCP server for real-time aircraft tracking via OpenSky Network API. Track flights by ICAO code or search aircraft near any location.",
   "license": "MIT",
