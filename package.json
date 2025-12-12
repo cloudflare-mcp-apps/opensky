@@ -6,12 +6,12 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pilpat/open-sky.git"
+    "url": "git+https://github.com/patpil-cloudflare-mcp/opensky.git"
   },
   "bugs": {
-    "url": "https://github.com/pilpat/open-sky/issues"
+    "url": "https://github.com/patpil-cloudflare-mcp/opensky/issues"
   },
-  "homepage": "https://github.com/pilpat/open-sky#readme",
+  "homepage": "https://github.com/patpil-cloudflare-mcp/opensky#readme",
   "keywords": [
     "mcp",
     "opensky",
