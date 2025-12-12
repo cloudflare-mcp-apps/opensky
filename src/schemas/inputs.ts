@@ -5,7 +5,7 @@
  * These schemas provide type safety, validation, and documentation.
  */
 
-import { z } from "zod";
+import * as z from "zod/v4";
 
 /**
  * Input schema for getAircraftByIcao tool
@@ -16,7 +16,7 @@ export const GetAircraftByIcaoInput = {
     icao24: z.string()
         .length(6)
         .regex(/^[0-9a-fA-F]{6}$/)
-        .describe("ICAO 24-bit address (6 hex characters, e.g., '3c6444' or 'a8b2c3')"),
+        .meta({ description: "ICAO 24-bit address (6 hex characters, e.g., '3c6444' or 'a8b2c3')" }),
 };
 
 /**
@@ -28,21 +28,21 @@ export const FindAircraftNearLocationInput = {
     latitude: z.number()
         .min(-90)
         .max(90)
-        .describe("Center point latitude in decimal degrees (-90 to 90, e.g., 52.2297 for Warsaw)"),
+        .meta({ description: "Center point latitude in decimal degrees (-90 to 90, e.g., 52.2297 for Warsaw)" }),
 
     longitude: z.number()
         .min(-180)
         .max(180)
-        .describe("Center point longitude in decimal degrees (-180 to 180, e.g., 21.0122 for Warsaw)"),
+        .meta({ description: "Center point longitude in decimal degrees (-180 to 180, e.g., 21.0122 for Warsaw)" }),
 
     radius_km: z.number()
         .min(1)
         .max(1000)
-        .describe("Search radius in kilometers (1-1000, e.g., 25 for 25km radius)"),
+        .meta({ description: "Search radius in kilometers (1-1000, e.g., 25 for 25km radius)" }),
 
     origin_country: z.string()
         .length(2)
         .regex(/^[A-Z]{2}$/)
         .optional()
-        .describe("Optional filter: ISO 3166-1 alpha-2 country code (e.g., 'US', 'DE', 'FR'). Filters results by aircraft origin country."),
+        .meta({ description: "Optional filter: ISO 3166-1 alpha-2 country code (e.g., 'US', 'DE', 'FR'). Filters results by aircraft origin country." }),
 };
