@@ -21,13 +21,37 @@ export { OpenSkyMcp };
  * - findAircraftNearLocation: Geographic search with bounding box
  */
 
+// Simple default handler for root and unmatched routes
+const defaultHandler = {
+    async fetch(_request: Request): Promise<Response> {
+        return new Response(
+            JSON.stringify({
+                service: "OpenSky Flight Tracker MCP Server",
+                status: "FREE PUBLIC SERVICE - No authentication required",
+                endpoints: {
+                    sse: "/sse - Server-Sent Events transport (for AnythingLLM, Claude Desktop)",
+                    mcp: "/mcp - Streamable HTTP transport (for ChatGPT and modern clients)"
+                },
+                tools: [
+                    "getAircraftByIcao - Direct lookup by ICAO24 transponder address",
+                    "findAircraftNearLocation - Geographic search with bounding box"
+                ]
+            }),
+            {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            }
+        );
+    }
+};
+
 // Create OAuthProvider instance (for McpAgent Durable Object routing)
 const oauthProvider = new OAuthProvider({
     apiHandlers: {
         '/sse': OpenSkyMcp.serveSSE('/sse'),
         '/mcp': OpenSkyMcp.serve('/mcp'),
     },
-    defaultHandler: undefined as any,
+    defaultHandler,
     authorizeEndpoint: "/authorize",
     tokenEndpoint: "/token",
     clientRegistrationEndpoint: "/register",
