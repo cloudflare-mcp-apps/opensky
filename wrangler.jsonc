@@ -61,8 +61,8 @@
   "kv_namespaces": [
     {
       "binding": "OAUTH_KV",
-      "id": "YOUR_OAUTH_KV_ID",
-      "preview_id": "YOUR_OAUTH_KV_PREVIEW_ID"
+      "id": "b77ec4c7e96043fab0c466a978c2f186",
+      "preview_id": "cf8ef9f38ab24ae583d20dd4e973810c"
     },
   ],
 
