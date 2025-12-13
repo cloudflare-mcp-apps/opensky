@@ -270,6 +270,46 @@ async function getOrCreateServer(env: Env): Promise<McpServer> {
   const openskyClient = new OpenSkyClient(env, localState, setLocalState);
 
   // ========================================================================
+  // SEP-1865 MCP Apps: Resource Registration
+  // ========================================================================
+  const flightMapResource = UI_RESOURCES.flightMap;
+
+  // Load HTML helper function (matches server.ts pattern)
+  const loadHtml = async (assets: Fetcher, path: string): Promise<string> => {
+    const response = await assets.fetch(new Request(`https://placeholder${path}`));
+    if (!response.ok) {
+      throw new Error(`Failed to load ${path}: ${response.status}`);
+    }
+    return response.text();
+  };
+
+  server.registerResource(
+    flightMapResource.name,
+    flightMapResource.uri,
+    {
+      description: flightMapResource.description,
+      mimeType: flightMapResource.mimeType
+    },
+    async () => {
+      const templateHTML = await loadHtml(env.ASSETS, "/flight-map.html");
+      return {
+        contents: [{
+          uri: flightMapResource.uri,
+          mimeType: flightMapResource.mimeType,
+          text: templateHTML,
+          _meta: flightMapResource._meta as Record<string, unknown>
+        }]
+      };
+    }
+  );
+
+  logger.info({
+    event: 'ui_resource_registered',
+    uri: flightMapResource.uri,
+    name: flightMapResource.name,
+  });
+
+  // ========================================================================
   // Tool 1: Get Aircraft by ICAO24 (FREE)
   // ========================================================================
   server.registerTool(
@@ -303,6 +343,10 @@ async function getOrCreateServer(env: Env): Promise<McpServer> {
           .meta({ description: "Center point longitude in decimal degrees (-180 to 180, e.g., 21.0122 for Warsaw)" }),
         radius_km: z.number().min(1).max(1000)
           .meta({ description: "Search radius in kilometers (1-1000, e.g., 25 for 25km radius)" }),
+      },
+      // SEP-1865: Link tool to predeclared UI resource
+      _meta: {
+        "ui/resourceUri": UI_RESOURCES.flightMap.uri
       }
     },
     async ({ latitude, longitude, radius_km }) => {
@@ -773,7 +817,6 @@ async function executeFindAircraftNearLocationTool(
     });
   }
 
-  // SEP-1865: Return structuredContent for UI rendering via notifications
   const structuredResult = {
     search_center: { latitude: args.latitude, longitude: args.longitude },
     radius_km: args.radius_km,
@@ -782,20 +825,12 @@ async function executeFindAircraftNearLocationTool(
     aircraft: aircraftList
   };
 
-  // Generate summary text for model context (SEP-1865 best practice)
-  const summaryText = aircraftList.length > 0
-    ? `Found ${aircraftList.length} aircraft within ${args.radius_km}km of (${args.latitude}, ${args.longitude}). ` +
-      `Top aircraft: ${aircraftList.slice(0, 3).map(a => a.callsign || a.icao24).join(', ')}` +
-      (aircraftList.length > 3 ? ` and ${aircraftList.length - 3} more` : '')
-    : `No aircraft currently flying within ${args.radius_km}km of (${args.latitude}, ${args.longitude})`;
-
+  // Return full JSON in content.text (matches nbp-exchange pattern)
   return {
     content: [{
       type: "text" as const,
-      text: summaryText
+      text: redacted
     }],
-    // structuredContent is sent to UI via ui/notifications/tool-result
-    // This data is NOT added to model context (SEP-1865 best practice)
     structuredContent: structuredResult
   };
 }
