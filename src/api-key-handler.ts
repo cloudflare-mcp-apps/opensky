@@ -429,6 +429,12 @@ async function handleHTTPTransport(
       case "ping":
         return handlePing(jsonRpcRequest);
 
+      case "resources/list":
+        return await handleResourcesList(jsonRpcRequest);
+
+      case "resources/read":
+        return await handleResourcesRead(jsonRpcRequest, env);
+
       case "tools/list":
         return await handleToolsList(server, jsonRpcRequest);
 
@@ -474,6 +480,7 @@ function handleInitialize(request: {
     protocolVersion: "2024-11-05",
     capabilities: {
       tools: {},
+      resources: {},
     },
     serverInfo: {
       name: "OpenSky Flight Tracker",
@@ -500,6 +507,103 @@ function handlePing(request: {
   });
 
   return jsonRpcResponse(request.id, {});
+}
+
+/**
+ * Handle resources/list request (list all available UI resources)
+ */
+async function handleResourcesList(request: {
+  jsonrpc: string;
+  id: number | string;
+  method: string;
+  params?: any;
+}): Promise<Response> {
+  logger.info({
+    event: 'transport_request',
+    transport: 'http',
+    method: 'resources/list',
+    user_email: 'system',
+  });
+
+  const flightMapResource = UI_RESOURCES.flightMap;
+
+  return jsonRpcResponse(request.id, {
+    resources: [
+      {
+        uri: flightMapResource.uri,
+        name: flightMapResource.name,
+        description: flightMapResource.description,
+        mimeType: flightMapResource.mimeType,
+      }
+    ]
+  });
+}
+
+/**
+ * Handle resources/read request (fetch UI resource content)
+ */
+async function handleResourcesRead(
+  request: {
+    jsonrpc: string;
+    id: number | string;
+    method: string;
+    params?: {
+      uri: string;
+    };
+  },
+  env: Env
+): Promise<Response> {
+  logger.info({
+    event: 'transport_request',
+    transport: 'http',
+    method: 'resources/read',
+    user_email: 'system',
+  });
+
+  if (!request.params?.uri) {
+    return jsonRpcResponse(request.id, null, {
+      code: -32602,
+      message: "Invalid params: uri is required",
+    });
+  }
+
+  const flightMapResource = UI_RESOURCES.flightMap;
+
+  // Check if requested URI matches our flight map resource
+  if (request.params.uri !== flightMapResource.uri) {
+    return jsonRpcResponse(request.id, null, {
+      code: -32602,
+      message: `Resource not found: ${request.params.uri}`,
+    });
+  }
+
+  try {
+    // Load widget HTML from Assets
+    const response = await env.ASSETS.fetch(new Request("https://placeholder/flight-map.html"));
+    if (!response.ok) {
+      throw new Error(`Failed to load widget: ${response.status}`);
+    }
+    const templateHTML = await response.text();
+
+    return jsonRpcResponse(request.id, {
+      contents: [{
+        uri: flightMapResource.uri,
+        mimeType: flightMapResource.mimeType,
+        text: templateHTML,
+        _meta: flightMapResource._meta as Record<string, unknown>
+      }]
+    });
+  } catch (error) {
+    logger.error({
+      event: 'server_error',
+      error: error instanceof Error ? error.message : String(error),
+      context: 'resource_read_handler',
+    });
+    return jsonRpcResponse(request.id, null, {
+      code: -32603,
+      message: `Failed to read resource: ${error instanceof Error ? error.message : String(error)}`,
+    });
+  }
 }
 
 /**
