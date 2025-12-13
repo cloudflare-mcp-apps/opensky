@@ -287,12 +287,16 @@ function FlightMapWidget() {
   );
 }
 
-// Mount React app
-const container = document.getElementById("root");
-if (container) {
+// Mount React app - wait for DOM to be ready
+window.addEventListener("load", () => {
+  const container = document.getElementById("root");
+  if (!container) {
+    throw new Error("Root element not found");
+  }
+
   createRoot(container).render(
     <StrictMode>
       <FlightMapWidget />
     </StrictMode>
   );
-}
+});
