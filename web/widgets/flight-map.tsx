@@ -193,7 +193,7 @@ function FlightMapWidget() {
   // Loading state (initial)
   if (loading && !data) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-100 dark:bg-slate-900">
+      <div className="flex items-center justify-center h-[600px] bg-slate-100 dark:bg-slate-900">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-300 border-t-blue-500 mx-auto mb-4" />
           <p className="text-slate-600 dark:text-slate-400">
@@ -207,7 +207,7 @@ function FlightMapWidget() {
   // Error state
   if (error && !data) {
     return (
-      <div className="flex items-center justify-center h-screen bg-red-50 dark:bg-red-900/20">
+      <div className="flex items-center justify-center h-[600px] bg-red-50 dark:bg-red-900/20">
         <div className="text-center p-6">
           <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
           <button
@@ -223,14 +223,14 @@ function FlightMapWidget() {
 
   if (!data) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-100 dark:bg-slate-900">
+      <div className="flex items-center justify-center h-[600px] bg-slate-100 dark:bg-slate-900">
         <p className="text-slate-600 dark:text-slate-400">No data available</p>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
+    <div className="h-[600px] flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       {/* Control Panel / Header */}
       <ControlPanel
         aircraftCount={data.aircraft_count}

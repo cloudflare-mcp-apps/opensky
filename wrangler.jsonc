@@ -81,7 +81,7 @@
    */
   "routes": [
     {
-      "pattern": "open-sky.wtyczki.ai",
+      "pattern": "opensky.wtyczki.ai",
       "custom_domain": true
     },
   ],
