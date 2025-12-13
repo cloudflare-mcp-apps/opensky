@@ -290,22 +290,12 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                         aircraft: filteredAircraftList
                     };
 
-                    // Generate summary text for model context (SEP-1865 best practice)
-                    const summaryText = filteredAircraftList.length > 0
-                        ? `Found ${filteredAircraftList.length} aircraft within ${radius_km}km of (${latitude}, ${longitude})` +
-                          (origin_country ? ` from ${origin_country}` : '') +
-                          `. Top aircraft: ${filteredAircraftList.slice(0, 3).map(a => a.callsign || a.icao24).join(', ')}` +
-                          (filteredAircraftList.length > 3 ? ` and ${filteredAircraftList.length - 3} more` : '')
-                        : `No aircraft currently flying within ${radius_km}km of (${latitude}, ${longitude})` +
-                          (origin_country ? ` with origin_country: ${origin_country}` : '');
-
+                    // Return full JSON in content.text (matches nbp-exchange pattern)
                     return {
                         content: [{
                             type: "text" as const,
-                            text: summaryText
+                            text: finalResult
                         }],
-                        // structuredContent is sent to UI via ui/notifications/tool-result
-                        // This data is NOT added to model context (SEP-1865 best practice)
                         structuredContent: structuredResult
                     };
                 } catch (error) {
