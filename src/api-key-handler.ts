@@ -577,6 +577,9 @@ async function handleToolsList(
         },
         required: ["latitude", "longitude", "radius_km"],
       },
+      _meta: {
+        "ui/resourceUri": UI_RESOURCES.flightMap.uri
+      }
     },
   ];
 
