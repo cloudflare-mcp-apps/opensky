@@ -70,17 +70,9 @@ export const UI_RESOURCES: Record<string, UIResourceDefinition> = {
     _meta: {
       ui: {
         csp: {
-          // No external API calls from UI - all data comes via MCP notifications
-          connectDomains: [],
-          // OpenStreetMap tile server for Leaflet map
-          resourceDomains: [
-            "https://tile.openstreetmap.org",
-            "https://a.tile.openstreetmap.org",
-            "https://b.tile.openstreetmap.org",
-            "https://c.tile.openstreetmap.org",
-          ],
+          connectDomains: [] as string[],
+          resourceDomains: [] as string[],
         },
-        // Request visible border since map may blend with host background
         prefersBorder: true,
       },
     },
