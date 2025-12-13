@@ -40,8 +40,8 @@ export interface UIResourceDefinition {
   name: string;
   /** Description of the resource's purpose */
   description: string;
-  /** MIME type - must be "text/html+mcp" for SEP-1865 */
-  mimeType: "text/html+mcp";
+  /** MIME type - must be "text/html;profile=mcp-app" for SEP-1865 */
+  mimeType: "text/html;profile=mcp-app";
   /** Resource metadata including CSP and display preferences */
   _meta: UIResourceMeta;
 }
@@ -66,7 +66,7 @@ export const UI_RESOURCES: Record<string, UIResourceDefinition> = {
       "Interactive Leaflet flight map showing real-time aircraft positions within a geographic search area. " +
       "Features: zoomable map with OpenStreetMap tiles, aircraft markers with altitude-based color coding, " +
       "marker clustering, country/altitude filters, auto-refresh, and clickable aircraft details with tracking actions.",
-    mimeType: "text/html+mcp",
+    mimeType: "text/html;profile=mcp-app",
     _meta: {
       ui: {
         csp: {
@@ -96,7 +96,7 @@ export const UI_EXTENSION_ID = "io.modelcontextprotocol/ui";
 /**
  * Required MIME type for SEP-1865 HTML resources
  */
-export const UI_MIME_TYPE = "text/html+mcp";
+export const UI_MIME_TYPE = "text/html;profile=mcp-app";
 
 /**
  * Check if client capabilities include MCP Apps UI support
