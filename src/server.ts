@@ -1,6 +1,7 @@
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
+import { RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps";
 import { OpenSkyClient } from "./api-client";
 import type { Env, State } from "./types";
 import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
@@ -74,21 +75,32 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
         const openskyClient = new OpenSkyClient(this.env, this.state, setStateWrapper);
 
         // ========================================================================
-        // SEP-1865 MCP Apps: Resource Registration
+        // SEP-1865 MCP Apps: Two-Part Registration Pattern
         // ========================================================================
+        // Pattern source: mcp-apps/patterns/server-registration-patterns.md#pattern-1
+        //
+        // CRITICAL: MCP Apps require registering TWO separate entities:
+        // PART 1: Resource (UI HTML template) - Registered below
+        // PART 2: Tool (with _meta linkage) - Registered further down
+        //
         // Note: Capability detection happens at runtime during tool calls since
         // McpAgent doesn't expose client capabilities during init()
         // We always register resources - hosts that don't support UI will ignore them
 
         const flightMapResource = UI_RESOURCES.flightMap;
 
-        // Register resource with correct parameter order: (name, uri, options, handler)
+        // ========================================================================
+        // PART 1: Register Resource (Predeclared UI Template)
+        // ========================================================================
+        // Pattern: server-registration-patterns.md#pattern-3
+        // Parameter order: (uri, uri, options, handler)
+        // For predeclared resources, both name and uri parameters use the same URI
         this.server.registerResource(
-            flightMapResource.name,          // name: "flight_map"
-            flightMapResource.uri,           // uri: "ui://opensky/flight-map"
+            flightMapResource.uri,           // uri (name parameter): "ui://opensky/flight-map"
+            flightMapResource.uri,           // uri (uri parameter): "ui://opensky/flight-map"
             {
                 description: flightMapResource.description,
-                mimeType: flightMapResource.mimeType
+                mimeType: UI_MIME_TYPE  // "text/html;profile=mcp-app" from ui-resources.ts
             },
             async () => {
                 // Load built widget from Cloudflare Assets binding
@@ -99,7 +111,7 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                 return {
                     contents: [{
                         uri: flightMapResource.uri,
-                        mimeType: UI_MIME_TYPE,
+                        mimeType: UI_MIME_TYPE,  // Required MIME type for SEP-1865
                         text: templateHTML,
                         _meta: flightMapResource._meta as Record<string, unknown>
                     }]
@@ -189,9 +201,13 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
         );
 
         // ========================================================================
-        // Tool 2: Find Aircraft Near Location (FREE)
+        // PART 2: Register Tool with UI Linkage (FREE)
         // ========================================================================
+        // Pattern: server-registration-patterns.md#pattern-1 (Two-Part Registration)
         // Geographic search using bounding box calculation
+        //
+        // CRITICAL: _meta[RESOURCE_URI_META_KEY] links this tool to PART 1 resource
+        // This linkage tells the host which UI to render when tool returns results
         this.server.registerTool(
             "findAircraftNearLocation",
             {
@@ -199,11 +215,11 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                 description: getToolDescription("findAircraftNearLocation"),
                 inputSchema: FindAircraftNearLocationInput,
                 outputSchema: FindAircraftNearLocationOutputSchema,
-                // SEP-1865: Link tool to predeclared UI resource
+                // SEP-1865: Link tool to predeclared UI resource (PART 1)
                 // Host will render this resource when tool returns results
                 // Always include - hosts that don't support UI will ignore it
                 _meta: {
-                    "ui/resourceUri": UI_RESOURCES.flightMap.uri
+                    [RESOURCE_URI_META_KEY]: UI_RESOURCES.flightMap.uri  // Links to PART 1
                 },
             },
             async ({ latitude, longitude, radius_km, origin_country }) => {

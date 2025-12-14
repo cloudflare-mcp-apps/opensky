@@ -30,11 +30,13 @@
   },
   "scripts": {
     "dev": "wrangler dev",
+    "dev:full": "concurrently \"npm run dev\" \"npm run watch:widgets\"",
     "deploy": "npm run build:widgets && wrangler deploy",
     "type-check": "tsc --noEmit",
     "cf-typegen": "wrangler types",
     "build:widget:map": "INPUT=widgets/flight-map.html vite build",
     "build:widgets": "npm run build:widget:map",
+    "watch:widgets": "npm run dev:widget",
     "dev:widget": "INPUT=widgets/flight-map.html vite build --watch"
   },
   "dependencies": {
@@ -60,6 +62,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.2.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.9.3",
