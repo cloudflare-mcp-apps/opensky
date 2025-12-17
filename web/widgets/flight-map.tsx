@@ -162,7 +162,7 @@ function FlightMapWidget() {
   // Open external FlightAware link
   const handleOpenExternal = useCallback(
     (icao24: string) => {
-      app?.sendOpenLink({
+      app?.openLink({
         url: `https://flightaware.com/live/modes/${icao24}`,
       });
     },
@@ -172,7 +172,7 @@ function FlightMapWidget() {
   // Send message to track aircraft
   const handleTrackAircraft = useCallback(
     (aircraft: Aircraft) => {
-      app?.sendMessage({
+      app?.message({
         role: "user",
         content: [
           {

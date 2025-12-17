@@ -71,11 +71,10 @@ export const UI_RESOURCES: Record<string, UIResourceDefinition> = {
       ui: {
         csp: {
           // connectDomains: Empty because all data comes via MCP protocol (no external API calls from widget)
-          // OpenStreetMap tiles are loaded via Leaflet which uses CDN, but viteSingleFile inlines all resources
           connectDomains: [] as string[],
-          // resourceDomains: Empty because all resources (Leaflet CSS/JS, images) are inlined by viteSingleFile
-          // The widget is a self-contained single HTML file with no external dependencies
-          resourceDomains: [] as string[],
+          // resourceDomains: OpenStreetMap tile server for Leaflet map tiles (fetched at runtime)
+          // Note: Leaflet JS/CSS are inlined by viteSingleFile, but map tiles are loaded dynamically
+          resourceDomains: ["tile.openstreetmap.org"],
         },
         prefersBorder: true,
       },

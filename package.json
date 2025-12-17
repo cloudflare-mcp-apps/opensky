@@ -41,8 +41,8 @@
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^0.1.0",
-    "@modelcontextprotocol/ext-apps": "git+https://github.com/modelcontextprotocol/ext-apps.git",
-    "@modelcontextprotocol/sdk": "^1.24.3",
+    "@modelcontextprotocol/ext-apps": "^0.2.0",
+    "@modelcontextprotocol/sdk": "^1.25.1",
     "@types/leaflet": "^1.9.21",
     "@types/leaflet.markercluster": "^1.5.6",
     "agents": "^0.2.30",

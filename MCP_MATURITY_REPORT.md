@@ -5,7 +5,7 @@
 **MCP SDK Version:** 1.24.1
 **Audited by:** Senior UX & Implementation Auditor
 **Framework:** 6 Pillars Maturity Framework
-**Source of Truth:** `/Users/patpil/cloudflare_mcp_projects/cloudflare_mcp_api/mcp_ux_implementation.md`
+**Source of Truth:** `/Users/patpil/cloudflare_mcp_projects/cloudflare_mcp_quiz/mcp_ux_implementation.md`
 
 ---
 
