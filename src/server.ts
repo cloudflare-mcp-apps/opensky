@@ -1,7 +1,12 @@
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
-import { RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps";
+import {
+    RESOURCE_MIME_TYPE,
+    RESOURCE_URI_META_KEY,
+    registerAppResource,
+    registerAppTool,
+} from "@modelcontextprotocol/ext-apps/server";
 import { OpenSkyClient } from "./api-client";
 import type { Env, State } from "./types";
 import { loadHtml } from "./helpers/assets";
@@ -18,7 +23,6 @@ import { TOOL_METADATA, getToolDescription } from './tools/descriptions.js';
 import { SERVER_INSTRUCTIONS } from './server-instructions.js';
 import {
     UI_RESOURCES,
-    UI_MIME_TYPE,
 } from './resources/ui-resources.js';
 
 /**
@@ -92,14 +96,15 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
         // PART 1: Register Resource (Predeclared UI Template)
         // ========================================================================
         // Pattern: server-registration-patterns.md#pattern-3
-        // Parameter order: (uri, uri, options, handler)
+        // Parameter order: (server, uri, name, options, handler)
         // For predeclared resources, both name and uri parameters use the same URI
-        this.server.registerResource(
+        registerAppResource(
+            this.server,
             flightMapResource.uri,           // uri (name parameter): "ui://opensky/flight-map"
             flightMapResource.uri,           // uri (uri parameter): "ui://opensky/flight-map"
             {
                 description: flightMapResource.description,
-                mimeType: UI_MIME_TYPE  // "text/html;profile=mcp-app" from ui-resources.ts
+                mimeType: RESOURCE_MIME_TYPE  // "text/html;profile=mcp-app" from SDK
             },
             async () => {
                 // Load built widget from Cloudflare Assets binding
@@ -110,7 +115,7 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                 return {
                     contents: [{
                         uri: flightMapResource.uri,
-                        mimeType: UI_MIME_TYPE,  // Required MIME type for SEP-1865
+                        mimeType: RESOURCE_MIME_TYPE,  // Required MIME type for SEP-1865
                         text: templateHTML,
                         _meta: flightMapResource._meta as Record<string, unknown>
                     }]
@@ -128,11 +133,12 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
         // Tool 1: Get Aircraft by ICAO24 (FREE)
         // ========================================================================
         // Direct lookup by ICAO 24-bit transponder address
-        this.server.registerTool(
-            "getAircraftByIcao",
+        registerAppTool(
+            this.server,
+            "get-aircraft-by-icao",
             {
-                title: TOOL_METADATA.getAircraftByIcao.title,
-                description: getToolDescription("getAircraftByIcao"),
+                title: TOOL_METADATA["get-aircraft-by-icao"].title,
+                description: getToolDescription("get-aircraft-by-icao"),
                 inputSchema: GetAircraftByIcaoInput,
                 outputSchema: GetAircraftByIcaoOutputSchema,
             },
@@ -174,11 +180,12 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
         //
         // CRITICAL: _meta[RESOURCE_URI_META_KEY] links this tool to PART 1 resource
         // This linkage tells the host which UI to render when tool returns results
-        this.server.registerTool(
-            "findAircraftNearLocation",
+        registerAppTool(
+            this.server,
+            "find-aircraft-near-location",
             {
-                title: TOOL_METADATA.findAircraftNearLocation.title,
-                description: getToolDescription("findAircraftNearLocation"),
+                title: TOOL_METADATA["find-aircraft-near-location"].title,
+                description: getToolDescription("find-aircraft-near-location"),
                 inputSchema: FindAircraftNearLocationInput,
                 outputSchema: FindAircraftNearLocationOutputSchema,
                 // SEP-1865: Link tool to predeclared UI resource (PART 1)

@@ -71,7 +71,7 @@ export const TOOL_METADATA = {
    * Direct lookup of aircraft details by ICAO 24-bit transponder address.
    * Low-cost operation (1 token) suitable for tracking specific aircraft.
    */
-  getAircraftByIcao: {
+  "get-aircraft-by-icao": {
     title: "Get Aircraft By ICAO",
 
     description: {
@@ -112,7 +112,7 @@ export const TOOL_METADATA = {
    * Geographic search for aircraft within a specified radius of a location.
    * Medium-cost operation (3 tokens) for discovering flight activity in a region.
    */
-  findAircraftNearLocation: {
+  "find-aircraft-near-location": {
     title: "Find Aircraft Near Location",
 
     description: {

@@ -28,11 +28,17 @@ import { validateApiKey } from "./auth/apiKeys";
 import type { Env, State } from "./types";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
+import {
+    RESOURCE_MIME_TYPE,
+    RESOURCE_URI_META_KEY,
+    registerAppResource,
+    registerAppTool,
+} from "@modelcontextprotocol/ext-apps/server";
 import { OpenSkyClient } from "./api-client";
 import { TOOL_METADATA, getToolDescription } from './tools/descriptions.js';
 import { SERVER_INSTRUCTIONS } from './server-instructions.js';
 import { logger } from './shared/logger';
-import { UI_RESOURCES, UI_MIME_TYPE } from './resources/ui-resources.js';
+import { UI_RESOURCES } from './resources/ui-resources.js';
 
 /**
  * Simple LRU (Least Recently Used) Cache for MCP Server instances
@@ -305,19 +311,20 @@ async function getOrCreateServer(
     return response.text();
   };
 
-  server.registerResource(
+  registerAppResource(
+    server,
     flightMapResource.name,
     flightMapResource.uri,
     {
       description: flightMapResource.description,
-      mimeType: flightMapResource.mimeType
+      mimeType: RESOURCE_MIME_TYPE
     },
     async () => {
       const templateHTML = await loadHtml(env.ASSETS, "/flight-map.html");
       return {
         contents: [{
           uri: flightMapResource.uri,
-          mimeType: flightMapResource.mimeType,
+          mimeType: RESOURCE_MIME_TYPE,
           text: templateHTML,
           _meta: flightMapResource._meta as Record<string, unknown>
         }]
@@ -334,11 +341,12 @@ async function getOrCreateServer(
   // ========================================================================
   // Tool 1: Get Aircraft by ICAO24 (FREE)
   // ========================================================================
-  server.registerTool(
-    "getAircraftByIcao",
+  registerAppTool(
+    server,
+    "get-aircraft-by-icao",
     {
-      title: TOOL_METADATA.getAircraftByIcao.title,
-      description: getToolDescription("getAircraftByIcao"),
+      title: TOOL_METADATA["get-aircraft-by-icao"].title,
+      description: getToolDescription("get-aircraft-by-icao"),
       inputSchema: {
         icao24: z.string().length(6).regex(/^[0-9a-fA-F]{6}$/)
           .meta({ description: "ICAO 24-bit address (6 hex characters, e.g., '3c6444' or 'a8b2c3')" }),
@@ -353,11 +361,12 @@ async function getOrCreateServer(
   // ========================================================================
   // Tool 2: Find Aircraft Near Location (FREE)
   // ========================================================================
-  server.registerTool(
-    "findAircraftNearLocation",
+  registerAppTool(
+    server,
+    "find-aircraft-near-location",
     {
-      title: TOOL_METADATA.findAircraftNearLocation.title,
-      description: getToolDescription("findAircraftNearLocation"),
+      title: TOOL_METADATA["find-aircraft-near-location"].title,
+      description: getToolDescription("find-aircraft-near-location"),
       inputSchema: {
         latitude: z.number().min(-90).max(90)
           .meta({ description: "Center point latitude in decimal degrees (-90 to 90, e.g., 52.2297 for Warsaw)" }),
@@ -368,7 +377,7 @@ async function getOrCreateServer(
       },
       // SEP-1865: Link tool to predeclared UI resource
       _meta: {
-        "ui/resourceUri": UI_RESOURCES.flightMap.uri
+        [RESOURCE_URI_META_KEY]: UI_RESOURCES.flightMap.uri
       }
     },
     async ({ latitude, longitude, radius_km }) => {

@@ -29,15 +29,16 @@
     }
   },
   "scripts": {
+    "build": "INPUT=widgets/flight-map.html vite build",
+    "build:widgets": "npm run build",
+    "watch": "INPUT=widgets/flight-map.html vite build --watch",
+    "watch:widgets": "npm run watch",
     "dev": "wrangler dev",
     "dev:full": "concurrently \"npm run dev\" \"npm run watch:widgets\"",
+    "dev:widget": "npm run watch",
     "deploy": "npm run build:widgets && wrangler deploy",
     "type-check": "tsc --noEmit",
-    "cf-typegen": "wrangler types",
-    "build:widget:map": "INPUT=widgets/flight-map.html vite build",
-    "build:widgets": "npm run build:widget:map",
-    "watch:widgets": "npm run dev:widget",
-    "dev:widget": "INPUT=widgets/flight-map.html vite build --watch"
+    "cf-typegen": "wrangler types"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^0.1.0",

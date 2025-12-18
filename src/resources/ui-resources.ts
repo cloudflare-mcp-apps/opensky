@@ -60,8 +60,8 @@ export const UI_RESOURCES: Record<string, UIResourceDefinition> = {
    * Data delivery: Via ui/notifications/tool-result notification
    */
   flightMap: {
-    uri: "ui://opensky/flight-map",
-    name: "flight_map",
+    uri: "ui://opensky/mcp-app.html",
+    name: "mcp_app",
     description:
       "Interactive Leaflet flight map showing real-time aircraft positions within a geographic search area. " +
       "Features: zoomable map with OpenStreetMap tiles, aircraft markers with altitude-based color coding, " +
@@ -72,9 +72,11 @@ export const UI_RESOURCES: Record<string, UIResourceDefinition> = {
         csp: {
           // connectDomains: Empty because all data comes via MCP protocol (no external API calls from widget)
           connectDomains: [] as string[],
-          // resourceDomains: OpenStreetMap tile server for Leaflet map tiles (fetched at runtime)
+          // resourceDomains: Tile servers for Leaflet map tiles (fetched at runtime)
           // Note: Leaflet JS/CSS are inlined by viteSingleFile, but map tiles are loaded dynamically
-          resourceDomains: ["tile.openstreetmap.org"],
+          // - tile.openstreetmap.org: OpenStreetMap tiles (light mode)
+          // - basemaps.cartocdn.com: CartoDB tiles (dark mode)
+          resourceDomains: ["tile.openstreetmap.org", "basemaps.cartocdn.com"],
         },
         prefersBorder: true,
       },
@@ -87,11 +89,6 @@ export const UI_RESOURCES: Record<string, UIResourceDefinition> = {
  * Hosts advertise support via extensions["io.modelcontextprotocol/ui"]
  */
 export const UI_EXTENSION_ID = "io.modelcontextprotocol/ui";
-
-/**
- * Required MIME type for SEP-1865 HTML resources
- */
-export const UI_MIME_TYPE = "text/html;profile=mcp-app";
 
 /**
  * Check if client capabilities include MCP Apps UI support

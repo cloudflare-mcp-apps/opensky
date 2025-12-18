@@ -60,6 +60,7 @@ export function LeafletMap({
   const markersRef = useRef<L.MarkerClusterGroup | null>(null);
   const radiusCircleRef = useRef<L.Circle | null>(null);
   const centerMarkerRef = useRef<L.CircleMarker | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
 
   // Initialize map
   useEffect(() => {
@@ -73,10 +74,17 @@ export function LeafletMap({
       attributionControl: true,
     });
 
-    // Add OpenStreetMap tiles
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    // Add theme-aware tile layer
+    const isDark = document.documentElement.classList.contains("dark");
+    const tileUrl = isDark
+      ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+      : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+    const attribution = isDark
+      ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+
+    tileLayerRef.current = L.tileLayer(tileUrl, {
+      attribution,
       maxZoom: 19,
     }).addTo(map);
 
@@ -135,8 +143,34 @@ export function LeafletMap({
       markersRef.current = null;
       radiusCircleRef.current = null;
       centerMarkerRef.current = null;
+      tileLayerRef.current = null;
     };
   }, [center, radiusKm]);
+
+  // Handle theme changes for tile layer
+  useEffect(() => {
+    if (!mapRef.current || !tileLayerRef.current) return;
+
+    const handleThemeChange = () => {
+      if (!tileLayerRef.current) return;
+
+      const isDark = document.documentElement.classList.contains("dark");
+      const tileUrl = isDark
+        ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+
+      tileLayerRef.current.setUrl(tileUrl);
+    };
+
+    // Watch for class changes on documentElement
+    const observer = new MutationObserver(handleThemeChange);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   // Update aircraft markers
   useEffect(() => {
@@ -223,9 +257,6 @@ export function LeafletMap({
         }
         .leaflet-container {
           font-family: inherit;
-        }
-        .dark .leaflet-tile-pane {
-          filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
         }
         .dark .leaflet-control-attribution {
           background: rgba(30, 41, 59, 0.8);

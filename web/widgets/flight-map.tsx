@@ -15,7 +15,7 @@
  * @see https://github.com/modelcontextprotocol/specification/blob/main/docs/specification/extensions/sep-1865-mcp-apps.md
  */
 
-import { StrictMode, useState, useEffect, useCallback, useMemo } from "react";
+import { StrictMode, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { useApp } from "@modelcontextprotocol/ext-apps/react";
 import { LeafletMap } from "../components/LeafletMap";
@@ -24,6 +24,24 @@ import { ControlPanel } from "../components/ControlPanel";
 import { Legend } from "../components/Legend";
 import type { Aircraft, FlightData, FilterState } from "../lib/types";
 import "../styles/globals.css";
+
+/**
+ * Debounce hook for performance optimization
+ * Delays function execution until after specified delay with no new calls
+ */
+function useDebounce<T extends (...args: unknown[]) => unknown>(
+  fn: T,
+  delay: number
+): T {
+  const timeoutRef = useRef<NodeJS.Timeout>();
+
+  return ((...args: unknown[]) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => fn(...args), delay);
+  }) as T;
+}
 
 /**
  * Main Flight Map Widget Component
@@ -128,7 +146,7 @@ function FlightMapWidget() {
 
     try {
       const result = await app.callServerTool({
-        name: "findAircraftNearLocation",
+        name: "find-aircraft-near-location",
         arguments: {
           latitude: data.search_center.latitude,
           longitude: data.search_center.longitude,
@@ -190,6 +208,13 @@ function FlightMapWidget() {
     setSelectedAircraft(aircraft);
   }, []);
 
+  // Debounced filter updates (300ms debounce to avoid excessive re-renders during rapid filter changes)
+  const debouncedSetFilterRef = useRef<typeof setFilter | null>(null);
+  if (!debouncedSetFilterRef.current) {
+    debouncedSetFilterRef.current = useDebounce(setFilter, 300);
+  }
+  const debouncedSetFilter = debouncedSetFilterRef.current;
+
   // Loading state (initial)
   if (loading && !data) {
     return (
@@ -242,7 +267,7 @@ function FlightMapWidget() {
         isLoading={loading}
         aircraft={data.aircraft}
         filter={filter}
-        onFilterChange={setFilter}
+        onFilterChange={debouncedSetFilter}
       />
 
       {/* Map Container */}
