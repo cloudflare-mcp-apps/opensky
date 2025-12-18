@@ -1,16 +1,21 @@
 /**
- * Public API Handler for OpenSky Flight Tracker
+ * API Key Authentication Handler for OpenSky Flight Tracker
  *
- * This is a FREE PUBLIC SERVICE - no authentication required.
+ * This module provides API key authentication support for MCP clients that don't support
+ * OAuth flows (like AnythingLLM, Cursor IDE, custom scripts).
  *
- * This module handles MCP protocol requests for all clients (Claude Desktop,
- * AnythingLLM, Cursor IDE, custom scripts) without any authentication.
+ * Authentication flow:
+ * 1. Extract API key from Authorization header
+ * 2. Validate key via shared D1 database (mcp-oauth)
+ * 3. Get user info from database
+ * 4. Create MCP server with tools
+ * 5. Handle MCP protocol request
+ * 6. Return response
  *
- * Request flow:
- * 1. Receive MCP protocol request
- * 2. Create MCP server with tools
- * 3. Execute tool
- * 4. Return response
+ * Architecture:
+ * - Shared D1 database (mcp-oauth) for centralized auth
+ * - Same database used by panel.wtyczki.ai
+ * - Contains: users, api_keys tables
  *
  * TODO: When you add new tools to server.ts, you MUST also:
  * 1. Register them in getOrCreateServer() (around line 260)
@@ -19,6 +24,7 @@
  * 4. Add tool schemas to handleToolsList() (around line 625)
  */
 
+import { validateApiKey } from "./auth/apiKeys";
 import type { Env, State } from "./types";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
@@ -165,9 +171,7 @@ const MAX_CACHED_SERVERS = 1000;
 const serverCache = new LRUCache<string, McpServer>(MAX_CACHED_SERVERS);
 
 /**
- * Main entry point for public MCP requests (no authentication required)
- *
- * This is a FREE PUBLIC SERVICE - no API key or authentication needed.
+ * Main entry point for API key authenticated MCP requests
  *
  * @param request - Incoming HTTP request
  * @param env - Cloudflare Workers environment
@@ -182,21 +186,41 @@ export async function handleApiKeyRequest(
   pathname: string
 ): Promise<Response> {
   try {
+    // 1. Extract API key from Authorization header
+    const authHeader = request.headers.get("Authorization");
+    const apiKey = authHeader?.replace("Bearer ", "");
+
+    if (!apiKey) {
+      logger.warn({ event: "auth_attempt", method: "api_key", success: false, reason: "Missing Authorization header" });
+      return jsonError("Missing Authorization header", 401);
+    }
+
+    // 2. Validate API key and get user info
+    const validationResult = await validateApiKey(apiKey, env);
+
+    if (!validationResult) {
+      logger.warn({ event: "auth_attempt", method: "api_key", success: false, reason: "Invalid or expired API key" });
+      return jsonError("Invalid or expired API key", 401);
+    }
+
+    const { userId, email } = validationResult;
+
     logger.info({
       event: 'transport_request',
       transport: pathname === '/sse' ? 'sse' : 'http',
-      method: 'public_access',
-      user_email: 'anonymous',
+      method: 'api_key',
+      user_id: userId,
+      user_email: email,
     });
 
-    // Create or get cached MCP server with tools (no auth needed)
-    const server = await getOrCreateServer(env);
+    // 3. Create or get cached MCP server with tools
+    const server = await getOrCreateServer(env, userId, email);
 
-    // Handle the MCP request using the appropriate transport
+    // 4. Handle the MCP request using the appropriate transport
     if (pathname === "/sse") {
       return await handleSSETransport(server, request);
     } else if (pathname === "/mcp") {
-      return await handleHTTPTransport(server, request, env);
+      return await handleHTTPTransport(server, request, env, userId, email);
     } else {
       return jsonError("Invalid endpoint. Use /sse or /mcp", 400);
     }
@@ -204,7 +228,7 @@ export async function handleApiKeyRequest(
     logger.error({
       event: 'server_error',
       error: error instanceof Error ? error.message : String(error),
-      context: 'public_request_handler',
+      context: 'api_key_request_handler',
       pathname,
     });
     return jsonError(
@@ -215,30 +239,35 @@ export async function handleApiKeyRequest(
 }
 
 /**
- * Get or create MCP server instance (public - no auth)
+ * Get or create MCP server instance for API key user
  *
  * This creates a standalone MCP server (not using McpAgent) with all tools.
- * The server instance is cached globally to avoid recreating it on every request.
+ * The server instance is cached per user to avoid recreating it on every request.
  *
  * Cache behavior:
  * - Cache hit: Returns existing server immediately (~1ms)
  * - Cache miss: Creates new server (~10-50ms), then caches it
+ * - Cache full: Evicts least recently used server automatically
  *
  * TODO: When you add new tools to server.ts, you MUST add them here too!
  *
  * @param env - Cloudflare Workers environment
+ * @param userId - User ID for token management
+ * @param email - User email for logging
  * @returns Configured MCP server instance
  */
-async function getOrCreateServer(env: Env): Promise<McpServer> {
-  const CACHE_KEY = "public_server";
-
-  // Check cache first
-  const cached = serverCache.get(CACHE_KEY);
+async function getOrCreateServer(
+  env: Env,
+  userId: string,
+  email: string
+): Promise<McpServer> {
+  // Check cache first (per user)
+  const cached = serverCache.get(userId);
   if (cached) {
     logger.info({
       event: 'cache_operation',
       operation: 'hit',
-      key: CACHE_KEY,
+      key: userId,
     });
     return cached;
   }
@@ -246,12 +275,12 @@ async function getOrCreateServer(env: Env): Promise<McpServer> {
   logger.info({
     event: 'cache_operation',
     operation: 'miss',
-    key: CACHE_KEY,
+    key: userId,
   });
 
   // Create new MCP server
   const server = new McpServer({
-    name: "OpenSky Flight Tracker (Public)",
+    name: "OpenSky Flight Tracker (API Key)",
     version: "1.0.0",
   });
 
@@ -355,13 +384,13 @@ async function getOrCreateServer(env: Env): Promise<McpServer> {
     }
   );
 
-  // Cache the server
-  serverCache.set(CACHE_KEY, server);
+  // Cache the server (automatic LRU eviction if cache is full)
+  serverCache.set(userId, server);
 
   logger.info({
     event: 'cache_operation',
     operation: 'set',
-    key: CACHE_KEY,
+    key: userId,
   });
   return server;
 }
@@ -372,8 +401,6 @@ async function getOrCreateServer(env: Env): Promise<McpServer> {
  * Streamable HTTP is the modern MCP transport protocol that replaced SSE.
  * It uses standard HTTP POST requests with JSON-RPC 2.0 protocol.
  *
- * This is a FREE PUBLIC SERVICE - no authentication required.
- *
  * Supported JSON-RPC methods:
  * - initialize: Protocol handshake and capability negotiation
  * - ping: Health check (required by AnythingLLM)
@@ -383,18 +410,23 @@ async function getOrCreateServer(env: Env): Promise<McpServer> {
  * @param server - Configured MCP server instance
  * @param request - Incoming HTTP POST request with JSON-RPC message
  * @param env - Cloudflare Workers environment
+ * @param userId - User ID for logging
+ * @param userEmail - User email for logging
  * @returns JSON-RPC response
  */
 async function handleHTTPTransport(
   server: McpServer,
   request: Request,
-  env: Env
+  env: Env,
+  userId: string,
+  userEmail: string
 ): Promise<Response> {
   logger.info({
     event: 'transport_request',
     transport: 'http',
-    method: 'json_rpc',
-    user_email: 'anonymous',
+    method: 'POST',
+    user_id: userId,
+    user_email: userEmail,
   });
 
   try {
@@ -439,7 +471,7 @@ async function handleHTTPTransport(
         return await handleToolsList(server, jsonRpcRequest);
 
       case "tools/call":
-        return await handleToolsCall(server, jsonRpcRequest, env);
+        return await handleToolsCall(server, jsonRpcRequest, env, userId, userEmail);
 
       default:
         return jsonRpcResponse(jsonRpcRequest.id, null, {
@@ -695,8 +727,6 @@ async function handleToolsList(
 /**
  * Handle tools/call request (execute a tool)
  *
- * This is a FREE PUBLIC SERVICE - no authentication required.
- *
  * LOCATION 3 of 4: Switch statement for tool routing
  */
 async function handleToolsCall(
@@ -710,7 +740,9 @@ async function handleToolsCall(
       arguments?: Record<string, any>;
     };
   },
-  env: Env
+  env: Env,
+  userId: string,
+  userEmail: string
 ): Promise<Response> {
   if (!request.params || !request.params.name) {
     return jsonRpcResponse(request.id, null, {
@@ -726,8 +758,8 @@ async function handleToolsCall(
   logger.info({
     event: 'tool_started',
     tool: toolName,
-    user_email: 'anonymous',
-    user_id: 'public',
+    user_id: userId,
+    user_email: userEmail,
     action_id: actionId,
     args: toolArgs,
   });
@@ -752,7 +784,8 @@ async function handleToolsCall(
         logger.error({
           event: 'tool_failed',
           tool: toolName,
-          user_email: 'anonymous',
+          user_id: userId,
+          user_email: userEmail,
           action_id: actionId,
           error: `Unknown tool: ${toolName}`,
           error_code: 'unknown_tool',
@@ -768,8 +801,8 @@ async function handleToolsCall(
     logger.info({
       event: 'tool_completed',
       tool: toolName,
-      user_email: 'anonymous',
-      user_id: 'public',
+      user_id: userId,
+      user_email: userEmail,
       action_id: actionId,
       duration_ms,
       tokens_consumed: 0,
@@ -780,8 +813,8 @@ async function handleToolsCall(
     logger.error({
       event: 'tool_failed',
       tool: toolName,
-      user_email: 'anonymous',
-      user_id: 'public',
+      user_id: userId,
+      user_email: userEmail,
       action_id: actionId,
       error: error instanceof Error ? error.message : String(error),
     });

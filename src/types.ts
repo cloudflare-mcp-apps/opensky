@@ -25,7 +25,13 @@ export interface Env {
     /** Durable Object namespace for MCP server instances (required by McpAgent) */
     MCP_OBJECT: DurableObjectNamespace;
 
-    /** D1 Database for token management (shared with mcp-token-system) */
+    /**
+     * D1 Database - Shared mcp-oauth database
+     *
+     * Contains: users, api_keys tables
+     * Same database as panel.wtyczki.ai for centralized auth.
+     * Used for both OAuth user verification and API key validation.
+     */
     TOKEN_DB: D1Database;
 
     /** WorkOS Client ID (public, used to initiate OAuth flows) */
@@ -60,8 +66,8 @@ export interface Env {
     /** OpenSky Network OAuth2 Client Secret */
     OPENSKY_CLIENT_SECRET: string;
 
-    /** KV namespace for API response caching */
-    CACHE_KV: KVNamespace;
+    /** KV namespace for API response caching (optional) */
+    CACHE_KV?: KVNamespace;
 }
 
 /**

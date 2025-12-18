@@ -1,12 +1,17 @@
 /**
  * Cloudflare Workers Configuration for OpenSky MCP Server
  *
- * FREE PUBLIC SERVICE - No authentication required
+ * Architecture: Resource Server with Shared D1 Database
+ * - Shared D1 database (mcp-oauth) for user and API key validation
+ * - OAuth flow via WorkOS AuthKit
+ * - Durable Objects for MCP protocol handling
  *
  * This MCP server uses:
  * - Durable Objects: Required by McpAgent for MCP protocol handling
- * - KV Namespace: For OAuth token storage (McpAgent requirement)
+ * - KV Namespaces: For OAuth token storage and user sessions (shared with mcp-oauth)
+ * - D1 Database: Shared mcp-oauth database for users and API keys
  * - OpenSky API: External flight data API (requires credentials)
+ * - WorkOS Secrets: API Key and Client ID for authentication
  *
  * For more details on Wrangler configuration:
  * https://developers.cloudflare.com/workers/wrangler/configuration/
@@ -53,16 +58,33 @@
   },
 
   /**
-   * KV Namespace - Required for McpAgent OAuth handling
-   *
-   * You need to create this namespace:
-   * wrangler kv:namespace create OAUTH_KV
+   * KV Namespaces (shared with mcp-oauth)
+   * - OAUTH_KV: Required for McpAgent OAuth handling
+   * - USER_SESSIONS: Shared with panel.wtyczki.ai for centralized sessions
    */
   "kv_namespaces": [
     {
       "binding": "OAUTH_KV",
       "id": "b77ec4c7e96043fab0c466a978c2f186",
       "preview_id": "cf8ef9f38ab24ae583d20dd4e973810c"
+    },
+    {
+      "binding": "USER_SESSIONS",
+      "id": "e5ad189139cd44f38ba0224c3d596c73",
+      "preview_id": "49c43fb4d6e242db87fd885ba46b5a1d"
+    },
+  ],
+
+  /**
+   * D1 Database - Shared mcp-oauth database
+   * Contains: users, api_keys tables
+   * Same database as panel.wtyczki.ai for centralized auth
+   */
+  "d1_databases": [
+    {
+      "binding": "TOKEN_DB",
+      "database_name": "mcp-oauth",
+      "database_id": "eac93639-d58e-4777-82e9-f1e28113d5b2"
     },
   ],
 
@@ -75,9 +97,6 @@
 
   /**
    * Custom Domain for production
-   *
-   * Update this to your domain after deployment:
-   * wrangler deploy
    */
   "routes": [
     {
@@ -87,7 +106,7 @@
   ],
 
   /**
-   * Disable workers.dev subdomain for security
+   * SECURITY: Disable workers.dev subdomain (RECOMMENDED)
    */
   "workers_dev": false,
 
@@ -96,6 +115,13 @@
    */
   "observability": {
     "enabled": true
+  },
+
+  /**
+   * Environment variables
+   */
+  "vars": {
+    "AI_GATEWAY_ID": "mcp-production-gateway"
   },
 
   /**

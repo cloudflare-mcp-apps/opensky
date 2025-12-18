@@ -226,6 +226,7 @@ export type TransportEvent =
       event: 'transport_request';
       transport: 'sse' | 'http';
       method: string;
+      user_id?: string;
       user_email: string;
     }
   | {
