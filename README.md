@@ -19,6 +19,13 @@ Track flights by ICAO transponder code or discover aircraft near any location wi
 
 ## Quick Start
 
+### Prerequisites
+
+The OpenSky MCP server requires OpenSky Network API credentials:
+1. Create account at https://opensky-network.org/
+2. Get OAuth2 client credentials from Account → API Credentials
+3. Configure as secrets in your deployment environment
+
 ### Using with Claude Desktop
 
 Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
@@ -27,11 +34,13 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 {
   "mcpServers": {
     "opensky": {
-      "url": "https://open-sky.wtyczki.ai/mcp"
+      "url": "https://opensky.wtyczki.ai/mcp"
     }
   }
 }
 ```
+
+Note: The public deployment requires valid OpenSky Network credentials configured in the worker environment.
 
 ### Using with Other MCP Clients
 
