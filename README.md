@@ -42,7 +42,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 ## Available Tools
 
-### `getAircraftByIcao`
+### `get-aircraft-by-icao`
 
 Get real-time details for a specific aircraft by its ICAO 24-bit transponder address.
 
@@ -56,7 +56,7 @@ Get real-time details for a specific aircraft by its ICAO 24-bit transponder add
 "Find aircraft with ICAO code 3c6444"
 ```
 
-### `findAircraftNearLocation`
+### `find-aircraft-near-location`
 
 Find all aircraft currently flying near a geographic location.
 
@@ -201,6 +201,44 @@ npm run build:widgets
 # Deploy
 npm run deploy
 ```
+
+## Migration from v1.x to v2.0
+
+Version 2.0 introduces breaking changes to align with MCP ecosystem standards.
+
+### Tool Name Changes
+
+Tool names have been standardized to kebab-case (HTTP-compatible):
+
+| v1.x | v2.0 |
+|------|------|
+| `getAircraftByIcao` | `get-aircraft-by-icao` |
+| `findAircraftNearLocation` | `find-aircraft-near-location` |
+
+**Action Required:** Update your MCP client configurations or tool call code to use the new tool names.
+
+### Widget Resource URI Change
+
+The interactive flight map resource URI has been standardized:
+
+| v1.x | v2.0 |
+|------|------|
+| `ui://opensky/flight-map` | `ui://opensky/mcp-app.html` |
+
+This change aligns with the MCP Apps convention (`ui://server-id/mcp-app.html`).
+
+### Widget Architecture Update
+
+The widget has been restructured with:
+- **Error Boundary:** Graceful error handling in the UI
+- **MCP Wrapper:** Separated protocol handling from UI logic
+- **Pure UI Component:** Easier to test and maintain
+
+This is an internal change with no impact on functionality.
+
+### Version Bump
+
+The package has been upgraded to `v2.0.0` to reflect breaking changes.
 
 ## Contributing
 

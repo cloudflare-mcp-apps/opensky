@@ -2,8 +2,9 @@
 
 **Generated**: 2025-12-18
 **Repository**: opensky
+**Version**: 2.0.0 (Breaking Changes - Tool Names & Resource URI Updated)
 **Status**: Production
-**Architecture**: MCP Apps (SEP-1865) - Resource Server with Shared D1 Database
+**Architecture**: MCP Apps (SEP-1865) - Resource Server with Shared D1 Database + SDK Helpers
 
 ---
 
@@ -23,8 +24,9 @@
 ### MCP Apps (SEP-1865) Configuration
 - **Assets Binding**: ✅ ASSETS from ./web/dist/widgets
 - **Widget Build System**: ✅ Vite + vite-plugin-singlefile
-- **UI Resource URIs**: ui://opensky/flight-map
+- **UI Resource URIs**: ui://opensky/mcp-app.html
 - **Two-Part Registration**: ✅ Resource + Tool with _meta linkage
+- **SDK Helpers**: ✅ registerAppResource, registerAppTool from @modelcontextprotocol/ext-apps/server
 
 ---
 
@@ -158,30 +160,38 @@
 
 ### 3.12 Resources (MCP Apps - SEP-1865)
 - **Status**: ✅ Implemented
-- **registerResource() API**: ✅ Used
-- **Resource URIs**: ui://opensky/flight-map
+- **registerAppResource() API**: ✅ Used (SDK helper from @modelcontextprotocol/ext-apps/server)
+- **Resource URIs**: ui://opensky/mcp-app.html
 - **Resource Templates**: ✅ Predeclared
-- **MIME Type**: text/html;profile=mcp-app (UI_MIME_TYPE constant)
+- **MIME Type**: text/html;profile=mcp-app (RESOURCE_MIME_TYPE constant from SDK)
 - **Handler Pattern**: ✅ async handler with loadHtml()
-- **_meta Field**: ✅ Includes title, icon, description, CSP
+- **_meta Field**: ✅ Includes CSP, prefersBorder configuration
+- **Widget Architecture**: ✅ Wrapper pattern with error boundary (Phase 4 restructuring)
 
 **Example Resource Registration**:
 ```typescript
-this.server.registerResource(
-    flightMapResource.uri,    // "ui://opensky/flight-map"
+import {
+    RESOURCE_MIME_TYPE,
+    registerAppResource,
+} from "@modelcontextprotocol/ext-apps/server";
+
+registerAppResource(
+    this.server,
+    flightMapResource.uri,    // "ui://opensky/mcp-app.html"
     flightMapResource.uri,    // Same for predeclared resources
     {
         description: flightMapResource.description,
-        mimeType: UI_MIME_TYPE,
+        mimeType: RESOURCE_MIME_TYPE,
+        _meta: { ui: flightMapResource._meta.ui! }
     },
     async () => {
         const html = await loadHtml(this.env.ASSETS, "/flight-map.html");
         return {
             contents: [{
                 uri: flightMapResource.uri,
-                mimeType: UI_MIME_TYPE,
+                mimeType: RESOURCE_MIME_TYPE,
                 text: html,
-                _meta: flightMapResource._meta,
+                _meta: flightMapResource._meta as Record<string, unknown>
             }],
         };
     }
@@ -201,9 +211,9 @@ this.server.registerResource(
 
 ---
 
-#### Tool 1: getAircraftByIcao
+#### Tool 1: get-aircraft-by-icao
 
-**Technical Name**: `getAircraftByIcao`
+**Technical Name**: `get-aircraft-by-icao`
 
 **Display Title**: Get Aircraft By ICAO
 
@@ -243,9 +253,9 @@ this.server.registerResource(
 
 ---
 
-#### Tool 2: findAircraftNearLocation
+#### Tool 2: find-aircraft-near-location
 
-**Technical Name**: `findAircraftNearLocation`
+**Technical Name**: `find-aircraft-near-location`
 
 **Display Title**: Find Aircraft Near Location
 
@@ -719,17 +729,52 @@ src/
     └── descriptions.ts         # Tool descriptions (4-part pattern)
 ```
 
-### Widget Files (`widgets/`)
+### Widget Files (`web/`)
 ```
-widgets/
-└── flight-map.html             # HTML entry point for Vite
+web/
+├── widgets/
+│   └── flight-map.html         # HTML entry point (references src/mcp-app.tsx)
+├── src/
+│   ├── mcp-app.tsx             # MCP protocol wrapper (NEW - Phase 4)
+│   ├── flight-map-widget.tsx   # Pure UI component (NEW - Phase 4)
+│   ├── error-boundary.tsx      # Error boundary for graceful error handling (NEW - Phase 4)
+│   ├── types.ts                # Widget-specific types
+│   ├── components/             # Reusable UI components
+│   │   ├── LeafletMap.tsx      # Leaflet map visualization
+│   │   ├── ControlPanel.tsx    # Aircraft filtering controls
+│   │   ├── InfoPanel.tsx       # Aircraft details panel
+│   │   └── Legend.tsx          # Altitude color legend
+│   ├── lib/
+│   │   ├── types.ts            # Shared types (Aircraft, FlightData, etc.)
+│   │   └── utils.ts            # Helper functions
+│   └── styles/
+│       └── globals.css         # Tailwind + custom styles
 ```
 
 ### Build Output (`web/dist/widgets/`)
 ```
 web/dist/widgets/
-└── flight-map.html             # Single-file HTML output from Vite
+└── flight-map.html             # Single-file HTML output from Vite (565.79 kB)
 ```
+
+### Widget Architecture (Phase 4 Restructuring)
+**Two-Layer Pattern:**
+1. **mcp-app.tsx** (MCP Protocol Layer)
+   - Handles MCP connection establishment
+   - Manages tool result notifications
+   - Manages theme changes from host
+   - Delegates rendering to pure UI component
+
+2. **flight-map-widget.tsx** (Pure UI Layer)
+   - All UI state and rendering logic
+   - Filter management, aircraft selection, refresh
+   - No MCP protocol concerns
+   - Easier to test independently
+
+3. **error-boundary.tsx** (Error Isolation)
+   - Catches React component errors
+   - Displays user-friendly error UI
+   - Prevents full widget crashes
 
 ### Configuration Files
 ```
@@ -741,7 +786,7 @@ web/dist/widgets/
 └── postcss.config.js           # PostCSS configuration
 ```
 
-### Common Scripts (package.json)
+### Common Scripts (package.json - Phase 7 Standardization)
 ```json
 {
   "scripts": {
@@ -749,13 +794,17 @@ web/dist/widgets/
     "deploy": "npm run build:widgets && wrangler deploy",
     "type-check": "tsc --noEmit",
     "cf-typegen": "wrangler types",
-    "build:widget:map": "INPUT=widgets/flight-map.html vite build",
-    "build:widgets": "npm run build:widget:map",
-    "dev:widget": "INPUT=widgets/flight-map.html vite build --watch",
+    "build": "INPUT=widgets/flight-map.html vite build",
+    "build:widgets": "npm run build",
+    "watch": "INPUT=widgets/flight-map.html vite build --watch",
+    "watch:widgets": "npm run watch",
+    "dev:widget": "npm run watch",
     "dev:full": "concurrently \"npm run dev\" \"npm run watch:widgets\""
   }
 }
 ```
+
+**Note**: Scripts follow MCP Apps standard naming (build, watch) with backward-compatible aliases (build:widgets, watch:widgets)
 
 ---
 
@@ -767,29 +816,52 @@ web/dist/widgets/
 
 ### Two-Part Registration Pattern
 
-**Part 1: Register Resource**
+**Part 1: Register Resource (SDK Helper)**
 ```typescript
-this.server.registerResource(
-    resourceUri,                    // "ui://opensky/flight-map"
+import {
+    RESOURCE_MIME_TYPE,
+    registerAppResource,
+} from "@modelcontextprotocol/ext-apps/server";
+
+registerAppResource(
+    this.server,
+    resourceUri,                    // "ui://opensky/mcp-app.html"
     resourceUri,                    // Same for predeclared
-    { description, mimeType },
-    async () => ({ contents: [{ uri, mimeType, text, _meta }] })
+    {
+        description,
+        mimeType: RESOURCE_MIME_TYPE,
+        _meta: { ui: resourceMeta.ui! }
+    },
+    async () => ({
+        contents: [{
+            uri,
+            mimeType: RESOURCE_MIME_TYPE,
+            text,
+            _meta: resourceMeta
+        }]
+    })
 );
 ```
 
-**Part 2: Register Tool with _meta Linkage**
+**Part 2: Register Tool with _meta Linkage (SDK Helper)**
 ```typescript
-this.server.registerTool(
+import {
+    RESOURCE_URI_META_KEY,
+    registerAppTool,
+} from "@modelcontextprotocol/ext-apps/server";
+
+registerAppTool(
+    this.server,
     toolId,
     {
+        title: toolName,
         description,
         inputSchema,
-        outputSchema,
         _meta: {
             [RESOURCE_URI_META_KEY]: resourceUri  // Links to UI
         }
     },
-    async (params) => ({
+    async (args: any) => ({
         content: [{
             type: 'text',
             text: result
