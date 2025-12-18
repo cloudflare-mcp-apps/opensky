@@ -119,5 +119,5 @@ export function hasUISupport(clientCapabilities: unknown): boolean {
     return false;
   }
 
-  return mimeTypes.includes(UI_MIME_TYPE) || mimeTypes.includes("text/html;profile=mcp-app");
+  return mimeTypes.includes("text/html;profile=mcp-app");
 }

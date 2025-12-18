@@ -100,11 +100,12 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
         // For predeclared resources, both name and uri parameters use the same URI
         registerAppResource(
             this.server,
-            flightMapResource.uri,           // uri (name parameter): "ui://opensky/flight-map"
-            flightMapResource.uri,           // uri (uri parameter): "ui://opensky/flight-map"
+            flightMapResource.uri,           // uri (name parameter): "ui://opensky/mcp-app.html"
+            flightMapResource.uri,           // uri (uri parameter): "ui://opensky/mcp-app.html"
             {
                 description: flightMapResource.description,
-                mimeType: RESOURCE_MIME_TYPE  // "text/html;profile=mcp-app" from SDK
+                mimeType: RESOURCE_MIME_TYPE,  // "text/html;profile=mcp-app" from SDK
+                _meta: { ui: flightMapResource._meta.ui! }
             },
             async () => {
                 // Load built widget from Cloudflare Assets binding
@@ -140,14 +141,15 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                 title: TOOL_METADATA["get-aircraft-by-icao"].title,
                 description: getToolDescription("get-aircraft-by-icao"),
                 inputSchema: GetAircraftByIcaoInput,
-                outputSchema: GetAircraftByIcaoOutputSchema,
+                _meta: {},
             },
-            async ({ icao24 }) => {
+            async (args: any) => {
+                const { icao24 } = args;
                 const TOOL_NAME = "getAircraftByIcao";
 
                 try {
                     // Execute tool logic (FREE - no auth or token checks)
-                    const aircraft = await openskyClient.getAircraftByIcao(icao24);
+                    const aircraft = await openskyClient.getAircraftByIcao(String(icao24));
 
                     const result = aircraft
                         ? JSON.stringify(aircraft, null, 2)
@@ -187,7 +189,6 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                 title: TOOL_METADATA["find-aircraft-near-location"].title,
                 description: getToolDescription("find-aircraft-near-location"),
                 inputSchema: FindAircraftNearLocationInput,
-                outputSchema: FindAircraftNearLocationOutputSchema,
                 // SEP-1865: Link tool to predeclared UI resource (PART 1)
                 // Host will render this resource when tool returns results
                 // Always include - hosts that don't support UI will ignore it
@@ -195,22 +196,23 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                     [RESOURCE_URI_META_KEY]: UI_RESOURCES.flightMap.uri  // Links to PART 1
                 },
             },
-            async ({ latitude, longitude, radius_km, origin_country }) => {
+            async (args: any) => {
+                const { latitude, longitude, radius_km, origin_country } = args;
                 const TOOL_NAME = "findAircraftNearLocation";
 
                 try {
                     // Execute tool logic (FREE - no auth or token checks)
                     const aircraftList = await openskyClient.findAircraftNearLocation(
-                        latitude,
-                        longitude,
-                        radius_km
+                        Number(latitude),
+                        Number(longitude),
+                        Number(radius_km)
                     );
 
                     // Apply optional origin_country filter (client-side filtering)
                     let filteredAircraftList = aircraftList;
                     if (origin_country) {
                         filteredAircraftList = aircraftList.filter(
-                            aircraft => aircraft.origin_country.toUpperCase() === origin_country.toUpperCase()
+                            aircraft => aircraft.origin_country.toUpperCase() === String(origin_country).toUpperCase()
                         );
                         logger.info({
                             event: 'aircraft_filtered',

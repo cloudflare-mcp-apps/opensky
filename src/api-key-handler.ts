@@ -313,11 +313,12 @@ async function getOrCreateServer(
 
   registerAppResource(
     server,
-    flightMapResource.name,
+    flightMapResource.uri,
     flightMapResource.uri,
     {
       description: flightMapResource.description,
-      mimeType: RESOURCE_MIME_TYPE
+      mimeType: RESOURCE_MIME_TYPE,
+      _meta: { ui: flightMapResource._meta.ui! }
     },
     async () => {
       const templateHTML = await loadHtml(env.ASSETS, "/flight-map.html");
@@ -350,7 +351,8 @@ async function getOrCreateServer(
       inputSchema: {
         icao24: z.string().length(6).regex(/^[0-9a-fA-F]{6}$/)
           .meta({ description: "ICAO 24-bit address (6 hex characters, e.g., '3c6444' or 'a8b2c3')" }),
-      }
+      },
+      _meta: {}
     },
     async ({ icao24 }) => {
       // Implementation handled in executeGetAircraftByIcaoTool()
