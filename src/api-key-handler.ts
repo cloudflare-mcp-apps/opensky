@@ -29,7 +29,6 @@ import type { Env, State } from "./types";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
 import { OpenSkyClient } from "./api-client";
-import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
 import { TOOL_METADATA, getToolDescription } from './tools/descriptions.js';
 import { SERVER_INSTRUCTIONS } from './server-instructions.js';
 import { logger } from './shared/logger';
@@ -176,7 +175,7 @@ const serverCache = new LRUCache<string, McpServer>(MAX_CACHED_SERVERS);
  * @param request - Incoming HTTP request
  * @param env - Cloudflare Workers environment
  * @param ctx - Execution context
- * @param pathname - Request pathname (/sse or /mcp)
+ * @param pathname - Request pathname (/mcp)
  * @returns MCP protocol response
  */
 export async function handleApiKeyRequest(
@@ -207,7 +206,7 @@ export async function handleApiKeyRequest(
 
     logger.info({
       event: 'transport_request',
-      transport: pathname === '/sse' ? 'sse' : 'http',
+      transport: 'http',
       method: 'api_key',
       user_id: userId,
       user_email: email,
@@ -216,14 +215,8 @@ export async function handleApiKeyRequest(
     // 3. Create or get cached MCP server with tools
     const server = await getOrCreateServer(env, userId, email);
 
-    // 4. Handle the MCP request using the appropriate transport
-    if (pathname === "/sse") {
-      return await handleSSETransport(server, request);
-    } else if (pathname === "/mcp") {
-      return await handleHTTPTransport(server, request, env, userId, email);
-    } else {
-      return jsonError("Invalid endpoint. Use /sse or /mcp", 400);
-    }
+    // 4. Handle the MCP request using HTTP transport
+    return await handleHTTPTransport(server, request, env, userId, email);
   } catch (error) {
     logger.error({
       event: 'server_error',
@@ -855,40 +848,8 @@ async function executeGetAircraftByIcaoTool(
     ? JSON.stringify(aircraft, null, 2)
     : `No aircraft found with ICAO24: ${args.icao24} (aircraft may not be currently flying)`;
 
-  // Security Processing
-  const sanitized = sanitizeOutput(result, {
-    removeHtml: true,
-    removeControlChars: true,
-    normalizeWhitespace: true,
-    maxLength: 5000
-  });
-
-  const { redacted, detectedPII } = redactPII(sanitized, {
-    redactEmails: false,
-    redactPhones: true,
-    redactCreditCards: true,
-    redactSSN: true,
-    redactBankAccounts: true,
-    redactPESEL: true,
-    redactPolishIdCard: true,
-    redactPolishPassport: true,
-    redactPolishPhones: true,
-    placeholder: '[REDACTED]'
-  });
-
-  if (detectedPII.length > 0) {
-    logger.warn({
-      event: 'pii_redacted',
-      tool: TOOL_NAME,
-      pii_types: detectedPII,
-      count: detectedPII.length,
-    });
-  }
-
-  const finalResult = redacted;
-
   return {
-    content: [{ type: "text" as const, text: finalResult }],
+    content: [{ type: "text" as const, text: result }],
   };
 }
 
@@ -927,36 +888,6 @@ async function executeFindAircraftNearLocationTool(
       }, null, 2)
     : `No aircraft currently flying within ${args.radius_km}km of (${args.latitude}, ${args.longitude})`;
 
-  // Security Processing
-  const sanitized = sanitizeOutput(result, {
-    removeHtml: true,
-    removeControlChars: true,
-    normalizeWhitespace: true,
-    maxLength: 5000
-  });
-
-  const { redacted, detectedPII } = redactPII(sanitized, {
-    redactEmails: false,
-    redactPhones: true,
-    redactCreditCards: true,
-    redactSSN: true,
-    redactBankAccounts: true,
-    redactPESEL: true,
-    redactPolishIdCard: true,
-    redactPolishPassport: true,
-    redactPolishPhones: true,
-    placeholder: '[REDACTED]'
-  });
-
-  if (detectedPII.length > 0) {
-    logger.warn({
-      event: 'pii_redacted',
-      tool: TOOL_NAME,
-      pii_types: detectedPII,
-      count: detectedPII.length,
-    });
-  }
-
   const structuredResult = {
     search_center: { latitude: args.latitude, longitude: args.longitude },
     radius_km: args.radius_km,
@@ -965,11 +896,10 @@ async function executeFindAircraftNearLocationTool(
     aircraft: aircraftList
   };
 
-  // Return full JSON in content.text (matches nbp-exchange pattern)
   return {
     content: [{
       type: "text" as const,
-      text: redacted
+      text: result
     }],
     structuredContent: structuredResult
   };
@@ -1000,94 +930,6 @@ function jsonRpcResponse(
       "Content-Type": "application/json",
     },
   });
-}
-
-/**
- * Handle SSE (Server-Sent Events) transport for MCP protocol
- *
- * SSE is used by AnythingLLM and other clients for real-time MCP communication.
- * This uses the standard MCP SDK SSEServerTransport for Cloudflare Workers.
- *
- * @param server - Configured MCP server instance
- * @param request - Incoming HTTP request
- * @returns SSE response stream
- */
-async function handleSSETransport(server: McpServer, request: Request): Promise<Response> {
-  logger.info({
-    event: 'transport_request',
-    transport: 'sse',
-    method: 'sse_setup',
-    user_email: 'system',
-  });
-
-  try {
-    // For Cloudflare Workers, we need to return a Response with a ReadableStream
-    // The MCP SDK's SSEServerTransport expects Node.js streams, so we'll implement
-    // SSE manually for Cloudflare Workers compatibility
-
-    const { readable, writable } = new TransformStream();
-    const writer = writable.getWriter();
-    const encoder = new TextEncoder();
-
-    // Send SSE headers
-    const response = new Response(readable, {
-      status: 200,
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache, no-transform",
-        "Connection": "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
-    });
-
-    // Connect server to client (handle in background)
-    // Note: This is a simplified implementation for API key auth
-    // Full SSE support would require handling POST messages from client
-
-    (async () => {
-      try {
-        // Send initial connection event
-        await writer.write(encoder.encode("event: message\n"));
-        await writer.write(encoder.encode('data: {"status":"connected"}\n\n'));
-
-        logger.info({
-          event: 'sse_connection',
-          status: 'established',
-          user_email: 'system',
-        });
-
-        // Keep connection alive
-        const keepAliveInterval = setInterval(async () => {
-          try {
-            await writer.write(encoder.encode(": keepalive\n\n"));
-          } catch (e) {
-            clearInterval(keepAliveInterval);
-          }
-        }, 30000);
-
-        // Note: Full MCP protocol implementation would go here
-        // For MVP, we're providing basic SSE connectivity
-      } catch (error) {
-        logger.error({
-          event: 'sse_connection',
-          status: 'error',
-          user_email: 'system',
-          error: error instanceof Error ? error.message : String(error),
-        });
-        await writer.close();
-      }
-    })();
-
-    return response;
-  } catch (error) {
-    logger.error({
-      event: 'sse_connection',
-      status: 'error',
-      user_email: 'system',
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
 }
 
 /**

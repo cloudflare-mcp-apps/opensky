@@ -89,13 +89,6 @@
   ],
 
   /**
-   * Workers AI binding (optional - for future AI features)
-   */
-  "ai": {
-    "binding": "AI"
-  },
-
-  /**
    * Custom Domain for production
    */
   "routes": [
@@ -115,13 +108,6 @@
    */
   "observability": {
     "enabled": true
-  },
-
-  /**
-   * Environment variables
-   */
-  "vars": {
-    "AI_GATEWAY_ID": "mcp-production-gateway"
   },
 
   /**

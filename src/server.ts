@@ -4,7 +4,6 @@ import * as z from "zod/v4";
 import { RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps";
 import { OpenSkyClient } from "./api-client";
 import type { Env, State } from "./types";
-import { sanitizeOutput, redactPII } from 'pilpat-mcp-security';
 import { loadHtml } from "./helpers/assets";
 import { logger } from './shared/logger';
 import {
@@ -148,43 +147,10 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                         ? JSON.stringify(aircraft, null, 2)
                         : `No aircraft found with ICAO24: ${icao24} (aircraft may not be currently flying)`;
 
-                    // Security Processing
-                    const sanitized = sanitizeOutput(result, {
-                        removeHtml: true,
-                        removeControlChars: true,
-                        normalizeWhitespace: true,
-                        maxLength: 5000
-                    });
-
-                    const { redacted, detectedPII } = redactPII(sanitized, {
-                        redactEmails: false,
-                        redactPhones: true,
-                        redactCreditCards: true,
-                        redactSSN: true,
-                        redactBankAccounts: true,
-                        redactPESEL: true,
-                        redactPolishIdCard: true,
-                        redactPolishPassport: true,
-                        redactPolishPhones: true,
-                        placeholder: '[REDACTED]'
-                    });
-
-                    if (detectedPII.length > 0) {
-                        logger.warn({
-                            event: 'pii_redacted',
-                            tool: TOOL_NAME,
-                            pii_types: detectedPII,
-                            count: detectedPII.length,
-                        });
-                    }
-
-                    const finalResult = redacted;
-
-                    // Return result
                     return {
                         content: [{
                             type: "text" as const,
-                            text: finalResult
+                            text: result
                         }],
                         structuredContent: aircraft as any
                     };
@@ -259,45 +225,6 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                         : `No aircraft currently flying within ${radius_km}km of (${latitude}, ${longitude})` +
                           (origin_country ? ` with origin_country: ${origin_country}` : '');
 
-                    // Security Processing
-                    const sanitized = sanitizeOutput(result, {
-                        removeHtml: true,
-                        removeControlChars: true,
-                        normalizeWhitespace: true,
-                        maxLength: 5000
-                    });
-
-                    const { redacted, detectedPII } = redactPII(sanitized, {
-                        redactEmails: false,
-                        redactPhones: true,
-                        redactCreditCards: true,
-                        redactSSN: true,
-                        redactBankAccounts: true,
-                        redactPESEL: true,
-                        redactPolishIdCard: true,
-                        redactPolishPassport: true,
-                        redactPolishPhones: true,
-                        placeholder: '[REDACTED]'
-                    });
-
-                    if (detectedPII.length > 0) {
-                        logger.warn({
-                            event: 'pii_redacted',
-                            tool: TOOL_NAME,
-                            pii_types: detectedPII,
-                            count: detectedPII.length,
-                        });
-                    }
-
-                    const finalResult = redacted;
-
-                    // Return result with structuredContent for SEP-1865 UI rendering
-                    // Host will:
-                    // 1. Fetch the UI resource template via resources/read
-                    // 2. Send tool input via ui/notifications/tool-input
-                    // 3. Send this structuredContent via ui/notifications/tool-result
-                    // 4. The template will render the aircraft data dynamically
-
                     const structuredResult = {
                         search_center: { latitude, longitude },
                         radius_km,
@@ -306,11 +233,10 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                         aircraft: filteredAircraftList
                     };
 
-                    // Return full JSON in content.text (matches nbp-exchange pattern)
                     return {
                         content: [{
                             type: "text" as const,
-                            text: finalResult
+                            text: result
                         }],
                         structuredContent: structuredResult
                     };

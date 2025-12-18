@@ -179,22 +179,6 @@ export type APIEvent =
     };
 
 /**
- * Security events
- */
-export type SecurityEvent =
-  | {
-      event: 'pii_redacted';
-      tool: string;
-      pii_types: string[];
-      count: number;
-    }
-  | {
-      event: 'origin_blocked';
-      origin: string;
-      reason: string;
-    };
-
-/**
  * Data processing events
  */
 export type DataEvent =
@@ -279,7 +263,6 @@ export type LogEvent =
   | TokenEvent
   | AuthEvent
   | APIEvent
-  | SecurityEvent
   | DataEvent
   | TransportEvent
   | SystemEvent

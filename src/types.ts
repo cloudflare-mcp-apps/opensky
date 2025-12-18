@@ -57,17 +57,11 @@ export interface Env {
      */
     USER_SESSIONS: KVNamespace;
 
-    /** Workers AI binding (optional, for future features) */
-    AI?: Ai;
-
     /** OpenSky Network OAuth2 Client ID */
     OPENSKY_CLIENT_ID: string;
 
     /** OpenSky Network OAuth2 Client Secret */
     OPENSKY_CLIENT_SECRET: string;
-
-    /** KV namespace for API response caching (optional) */
-    CACHE_KV?: KVNamespace;
 }
 
 /**

@@ -51,7 +51,6 @@
     "hono": "^4.10.4",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
-    "pilpat-mcp-security": "^1.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^3.4.0",
