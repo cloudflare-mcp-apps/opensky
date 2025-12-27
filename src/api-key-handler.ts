@@ -58,13 +58,12 @@ import { UI_RESOURCES } from './resources/ui-resources.js';
  * 🔸 **Performance Optimization Only:**
  *   - This is a PERFORMANCE optimization, not critical state storage
  *   - Cache misses simply recreate the MCP server (acceptable overhead)
- *   - Critical state (balances, tokens, transactions) is stored in D1 database
+ *   - Critical state (user data, sessions) is stored in D1 database
  *
  * 🔸 **Why This Is Safe:**
  *   - MCP servers are stateless (tools query database on each call)
  *   - Recreating a server doesn't cause data loss or corruption
- *   - Token consumption is atomic via D1 transactions (not cached)
- *   - User balances are ALWAYS queried from database (never cached)
+ *   - User data is ALWAYS queried from database (never cached)
  *
  * 🔸 **LRU Eviction:**
  *   - When cache reaches MAX_SIZE, the least recently used server is evicted
@@ -340,7 +339,7 @@ async function getOrCreateServer(
   });
 
   // ========================================================================
-  // Tool 1: Get Aircraft by ICAO24 (FREE)
+  // Tool 1: Get Aircraft by ICAO24
   // ========================================================================
   registerAppTool(
     server,
@@ -361,7 +360,7 @@ async function getOrCreateServer(
   );
 
   // ========================================================================
-  // Tool 2: Find Aircraft Near Location (FREE)
+  // Tool 2: Find Aircraft Near Location
   // ========================================================================
   registerAppTool(
     server,
@@ -472,10 +471,10 @@ async function handleHTTPTransport(
         return await handleResourcesRead(jsonRpcRequest, env);
 
       case "tools/list":
-        return await handleToolsList(server, jsonRpcRequest);
+        return await handleToolsList(jsonRpcRequest);
 
       case "tools/call":
-        return await handleToolsCall(server, jsonRpcRequest, env, userId, userEmail);
+        return await handleToolsCall(jsonRpcRequest, env, userId, userEmail);
 
       default:
         return jsonRpcResponse(jsonRpcRequest.id, null, {
@@ -648,7 +647,6 @@ async function handleResourcesRead(
  * LOCATION 2 of 4: Tool schemas for tools/list response
  */
 async function handleToolsList(
-  server: McpServer,
   request: {
     jsonrpc: string;
     id: number | string;
@@ -734,7 +732,6 @@ async function handleToolsList(
  * LOCATION 3 of 4: Switch statement for tool routing
  */
 async function handleToolsCall(
-  server: McpServer,
   request: {
     jsonrpc: string;
     id: number | string;
@@ -771,7 +768,7 @@ async function handleToolsCall(
   const startTime = Date.now();
 
   try {
-    // Execute tool logic based on tool name (FREE - no auth or token checks)
+    // Execute tool logic based on tool name
 
     let result: any;
 
@@ -809,7 +806,6 @@ async function handleToolsCall(
       user_email: userEmail,
       action_id: actionId,
       duration_ms,
-      tokens_consumed: 0,
     });
 
     return jsonRpcResponse(request.id, result);
@@ -830,11 +826,11 @@ async function handleToolsCall(
 }
 
 /**
- * LOCATION 4 of 4: Tool execution functions (FREE - no auth or tokens)
+ * LOCATION 4 of 4: Tool execution functions
  */
 
 /**
- * Execute getAircraftByIcao tool (FREE)
+ * Execute getAircraftByIcao tool
  */
 async function executeGetAircraftByIcaoTool(
   args: Record<string, any>,
@@ -852,7 +848,7 @@ async function executeGetAircraftByIcaoTool(
   };
   const openskyClient = new OpenSkyClient(env, localState, setLocalState);
 
-  // Execute tool logic (FREE - no auth or token checks)
+  // Execute tool logic
   const aircraft = await openskyClient.getAircraftByIcao(args.icao24);
 
   const result = aircraft
@@ -865,7 +861,7 @@ async function executeGetAircraftByIcaoTool(
 }
 
 /**
- * Execute findAircraftNearLocation tool (FREE)
+ * Execute findAircraftNearLocation tool
  */
 async function executeFindAircraftNearLocationTool(
   args: Record<string, any>,
@@ -883,7 +879,7 @@ async function executeFindAircraftNearLocationTool(
   };
   const openskyClient = new OpenSkyClient(env, localState, setLocalState);
 
-  // Execute tool logic (FREE - no auth or token checks)
+  // Execute tool logic
   const aircraftList = await openskyClient.findAircraftNearLocation(
     args.latitude,
     args.longitude,

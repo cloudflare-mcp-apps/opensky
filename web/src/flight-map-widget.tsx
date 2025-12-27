@@ -35,18 +35,21 @@ interface FlightMapWidgetProps {
  * Debounce hook for performance optimization
  * Delays function execution until after specified delay with no new calls
  */
-function useDebounce<T extends (...args: unknown[]) => unknown>(
+function useDebounce<T extends (...args: any[]) => any>(
   fn: T,
   delay: number
 ): T {
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-  return ((...args: unknown[]) => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    timeoutRef.current = setTimeout(() => fn(...args), delay);
-  }) as T;
+  return useCallback(
+    ((...args: Parameters<T>) => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(() => fn(...args), delay);
+    }) as T,
+    [fn, delay]
+  );
 }
 
 export function FlightMapWidget({
@@ -175,11 +178,7 @@ export function FlightMapWidget({
   }, []);
 
   // Debounced filter updates (300ms debounce to avoid excessive re-renders during rapid filter changes)
-  const debouncedSetFilterRef = useRef<typeof setFilter | null>(null);
-  if (!debouncedSetFilterRef.current) {
-    debouncedSetFilterRef.current = useDebounce(setFilter, 300);
-  }
-  const debouncedSetFilter = debouncedSetFilterRef.current;
+  const debouncedSetFilter = useDebounce(setFilter, 300);
 
   // Loading state (initial)
   if (loading && !data) {

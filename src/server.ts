@@ -31,8 +31,6 @@ import {
  * Provides real-time aircraft tracking via the OpenSky Network API.
  * Uses OAuth2 client credentials flow with automatic 30-minute token refresh.
  *
- * This is a FREE PUBLIC SERVICE - no authentication or tokens required.
- *
  * Generic type parameters:
  * - Env: Cloudflare Workers environment bindings (KV, OpenSky credentials)
  * - State: Durable Object state for OAuth token storage (access_token, expires_at)
@@ -148,7 +146,7 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                 const TOOL_NAME = "getAircraftByIcao";
 
                 try {
-                    // Execute tool logic (FREE - no auth or token checks)
+                    // Execute tool logic
                     const aircraft = await openskyClient.getAircraftByIcao(String(icao24));
 
                     const result = aircraft
@@ -201,7 +199,7 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                 const TOOL_NAME = "findAircraftNearLocation";
 
                 try {
-                    // Execute tool logic (FREE - no auth or token checks)
+                    // Execute tool logic
                     const aircraftList = await openskyClient.findAircraftNearLocation(
                         Number(latitude),
                         Number(longitude),

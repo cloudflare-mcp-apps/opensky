@@ -209,11 +209,7 @@ function FlightMapWidget() {
   }, []);
 
   // Debounced filter updates (300ms debounce to avoid excessive re-renders during rapid filter changes)
-  const debouncedSetFilterRef = useRef<typeof setFilter | null>(null);
-  if (!debouncedSetFilterRef.current) {
-    debouncedSetFilterRef.current = useDebounce(setFilter, 300);
-  }
-  const debouncedSetFilter = debouncedSetFilterRef.current;
+  const debouncedSetFilter = useDebounce(setFilter, 300);
 
   // Loading state (initial)
   if (loading && !data) {

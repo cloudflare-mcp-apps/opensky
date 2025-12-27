@@ -151,8 +151,6 @@ Geographic searches automatically include interactive Leaflet maps showing:
 
 ## Security & Privacy
 
-- Email addresses in metadata are NOT redacted (OpenSky Network is public data)
-- All other PII is automatically redacted via security processing
 - ADS-B data is public broadcast information
 - Aircraft positions are public and not considered sensitive
 `.trim();
