@@ -32,7 +32,7 @@ export interface Env {
      * Same database as panel.wtyczki.ai for centralized auth.
      * Used for both OAuth user verification and API key validation.
      */
-    TOKEN_DB: D1Database;
+    DB: D1Database;
 
     /** WorkOS Client ID (public, used to initiate OAuth flows) */
     WORKOS_CLIENT_ID: string;
@@ -181,7 +181,7 @@ export interface AircraftData {
  */
 export enum ResponseFormat {
     /**
-     * Concise format: Essential data only, ~1/3 tokens
+     * Concise format: Essential data only
      *
      * - Returns human-readable names, descriptions, and key attributes
      * - Excludes technical IDs, metadata, and redundant fields
