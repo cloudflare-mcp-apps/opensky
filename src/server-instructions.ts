@@ -22,7 +22,7 @@ Access live flight data from the OpenSky Network covering aircraft worldwide wit
 
 ## Available Tools
 
-### getAircraftByIcao (1 token)
+### getAircraftByIcao
 Get real-time details for a specific aircraft by its ICAO 24-bit transponder address.
 
 **When to use:**
@@ -36,7 +36,7 @@ Get real-time details for a specific aircraft by its ICAO 24-bit transponder add
 
 **Returns:** Current position (lat/lon/altitude), velocity (speed, vertical rate, heading), callsign, origin country, last contact timestamp, squawk code.
 
-### findAircraftNearLocation (3 tokens)
+### findAircraftNearLocation
 Find all aircraft currently flying within a specified radius of a geographic location.
 
 **When to use:**
@@ -145,7 +145,7 @@ Geographic searches automatically include interactive Leaflet maps showing:
 
 ## Cost Optimization
 
-- Use \`getAircraftByIcao\` (1 token) for known aircraft instead of geographic search (3 tokens)
+- Use \`getAircraftByIcao\` for known aircraft instead of geographic search when you have the ICAO code
 - After geographic discovery, use ICAO codes from results for follow-up queries
 - Batch questions: "Show flights over 3 cities" can reuse one search if cities are close
 
