@@ -3,7 +3,7 @@
  *
  * This file defines UI resources that are registered with the MCP server
  * and can be discovered via resources/list. Tools reference these resources
- * via _meta["ui/resourceUri"] metadata.
+ * via _meta.ui.resourceUri metadata (v0.4.0+ nested pattern).
  *
  * @see https://github.com/modelcontextprotocol/specification/blob/main/docs/specification/extensions/sep-1865-mcp-apps.md
  */

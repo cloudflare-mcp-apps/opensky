@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
 import {
     RESOURCE_MIME_TYPE,
-    RESOURCE_URI_META_KEY,
+    // NOTE: RESOURCE_URI_META_KEY is deprecated in v0.4.0 - use nested _meta.ui.resourceUri
     registerAppResource,
     registerAppTool,
 } from "@modelcontextprotocol/ext-apps/server";
@@ -191,7 +191,7 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                 // Host will render this resource when tool returns results
                 // Always include - hosts that don't support UI will ignore it
                 _meta: {
-                    [RESOURCE_URI_META_KEY]: UI_RESOURCES.flightMap.uri  // Links to PART 1
+                    ui: { resourceUri: UI_RESOURCES.flightMap.uri }  // v0.4.0+: nested structure
                 },
             },
             async (args: any) => {

@@ -30,7 +30,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
 import {
     RESOURCE_MIME_TYPE,
-    RESOURCE_URI_META_KEY,
+    // NOTE: RESOURCE_URI_META_KEY is deprecated in v0.4.0 - use nested _meta.ui.resourceUri
     registerAppResource,
     registerAppTool,
 } from "@modelcontextprotocol/ext-apps/server";
@@ -378,7 +378,7 @@ async function getOrCreateServer(
       },
       // SEP-1865: Link tool to predeclared UI resource
       _meta: {
-        [RESOURCE_URI_META_KEY]: UI_RESOURCES.flightMap.uri
+        ui: { resourceUri: UI_RESOURCES.flightMap.uri }  // v0.4.0+
       }
     },
     async ({ latitude, longitude, radius_km }) => {
@@ -716,7 +716,7 @@ async function handleToolsList(
         required: ["latitude", "longitude", "radius_km"],
       },
       _meta: {
-        "ui/resourceUri": UI_RESOURCES.flightMap.uri
+        ui: { resourceUri: UI_RESOURCES.flightMap.uri }  // v0.4.0+
       }
     },
   ];
