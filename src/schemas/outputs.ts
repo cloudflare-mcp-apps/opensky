@@ -73,9 +73,6 @@ export const FindAircraftNearLocationOutputSchema = z.object({
     radius_km: z.number()
         .meta({ description: "Search radius in kilometers" }),
 
-    country_filter: z.string().length(2).nullable()
-        .meta({ description: "Applied country filter (ISO 3166-1 alpha-2 code), null if not filtered" }),
-
     aircraft_count: z.number()
         .meta({ description: "Number of aircraft found in area (after filtering)" }),
 

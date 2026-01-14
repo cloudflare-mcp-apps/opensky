@@ -137,13 +137,6 @@ export type APIEvent =
  */
 export type DataEvent =
   | {
-      event: 'aircraft_filtered';
-      total_count: number;
-      filtered_count: number;
-      filter_type: 'country';
-      filter_value: string;
-    }
-  | {
       event: 'aircraft_found';
       icao24: string;
       callsign?: string;

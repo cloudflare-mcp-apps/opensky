@@ -195,7 +195,7 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                 },
             },
             async (args: any) => {
-                const { latitude, longitude, radius_km, filter_only_country } = args;
+                const { latitude, longitude, radius_km } = args;
                 const TOOL_NAME = "findAircraftNearLocation";
 
                 try {
@@ -206,38 +206,20 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                         Number(radius_km)
                     );
 
-                    // Apply optional country filter (client-side filtering)
-                    let filteredAircraftList = aircraftList;
-                    if (filter_only_country) {
-                        filteredAircraftList = aircraftList.filter(
-                            aircraft => aircraft.origin_country.toUpperCase() === String(filter_only_country).toUpperCase()
-                        );
-                        logger.info({
-                            event: 'aircraft_filtered',
-                            total_count: aircraftList.length,
-                            filtered_count: filteredAircraftList.length,
-                            filter_type: 'country',
-                            filter_value: filter_only_country,
-                        });
-                    }
-
-                    const result = filteredAircraftList.length > 0
+                    const result = aircraftList.length > 0
                         ? JSON.stringify({
                             search_center: { latitude, longitude },
                             radius_km,
-                            country_filter: filter_only_country || null,
-                            aircraft_count: filteredAircraftList.length,
-                            aircraft: filteredAircraftList
+                            aircraft_count: aircraftList.length,
+                            aircraft: aircraftList
                         }, null, 2)
-                        : `No aircraft currently flying within ${radius_km}km of (${latitude}, ${longitude})` +
-                          (filter_only_country ? ` filtered by country: ${filter_only_country}` : '');
+                        : `No aircraft currently flying within ${radius_km}km of (${latitude}, ${longitude})`;
 
                     const structuredResult = {
                         search_center: { latitude, longitude },
                         radius_km,
-                        country_filter: filter_only_country || null,
-                        aircraft_count: filteredAircraftList.length,
-                        aircraft: filteredAircraftList
+                        aircraft_count: aircraftList.length,
+                        aircraft: aircraftList
                     };
 
                     return {

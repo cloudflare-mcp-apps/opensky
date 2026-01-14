@@ -898,7 +898,6 @@ async function executeFindAircraftNearLocationTool(
   const structuredResult = {
     search_center: { latitude: args.latitude, longitude: args.longitude },
     radius_km: args.radius_km,
-    country_filter: null,
     aircraft_count: aircraftList.length,
     aircraft: aircraftList
   };
