@@ -45,9 +45,9 @@ export function InfoPanel({
   onOpenExternal,
 }: InfoPanelProps) {
   return (
-    <div className="absolute top-3 right-3 bg-white dark:bg-slate-800 rounded-lg shadow-xl p-4 min-w-[280px] max-w-[320px] z-[1000]">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-3 pb-2 border-b-2 border-blue-500">
+    <div className="absolute top-3 right-3 bottom-3 bg-white dark:bg-slate-800 rounded-lg shadow-xl p-4 min-w-[280px] max-w-[320px] z-[1000] flex flex-col max-h-[calc(100%-24px)]">
+      {/* Header - fixed height, never shrinks */}
+      <div className="flex justify-between items-center mb-3 pb-2 border-b-2 border-blue-500 flex-shrink-0">
         <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
           {aircraft.callsign || "Unknown"}
         </h3>
@@ -60,8 +60,8 @@ export function InfoPanel({
         </button>
       </div>
 
-      {/* Aircraft Details */}
-      <div className="space-y-0.5">
+      {/* Aircraft Details - scrollable if needed */}
+      <div className="space-y-0.5 flex-1 overflow-y-auto min-h-0">
         <InfoRow label="ICAO24" value={aircraft.icao24.toUpperCase()} />
         <InfoRow label="Country" value={aircraft.origin_country} />
         <InfoRow
@@ -98,8 +98,8 @@ export function InfoPanel({
         />
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex gap-2 mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+      {/* Action Buttons - fixed at bottom, never shrinks */}
+      <div className="flex gap-2 mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 flex-shrink-0">
         <button
           onClick={() => onTrack(aircraft)}
           className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-xs font-medium transition-colors"
