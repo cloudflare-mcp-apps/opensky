@@ -49,7 +49,7 @@ Find all aircraft currently flying within a specified radius of a geographic loc
 - \`latitude\`: -90 to 90 (e.g., 52.2297 for Warsaw)
 - \`longitude\`: -180 to 180 (e.g., 21.0122 for Warsaw)
 - \`radius_km\`: 1 to 1000 kilometers (recommend 25-50km for cities)
-- \`origin_country\`: Optional 2-letter ISO code filter (e.g., 'US', 'DE', 'FR')
+- \`filter_only_country\`: Explicit country filter (2-letter ISO code). ONLY use when user explicitly requests filtering
 
 **Returns:** Array of aircraft with same data as getAircraftByIcao, plus interactive Leaflet map visualization.
 
@@ -67,9 +67,10 @@ Find all aircraft currently flying within a specified radius of a geographic loc
 4. Total cost: 3 tokens (discovery) + 1 token per follow-up
 
 ### Country Filtering
-- Add \`origin_country\` parameter ONLY when user explicitly requests filtering by country
+- \`filter_only_country\` is for EXPLICIT filtering requests only
 - Do NOT infer country from city/location names (e.g., "Paris" does NOT mean filter by FR)
-- If user says "all countries", "any country", or "without filtering" → omit origin_country
+- Only use when user says: "filter by country", "only X aircraft", "show only X planes"
+- If user says "all countries", "any country", or doesn't mention filtering → omit filter_only_country
 
 ### Radius Selection Guidelines
 - **Small area (5-15km):** Specific airport or small town
@@ -139,9 +140,9 @@ Geographic searches automatically include interactive Leaflet maps showing:
 - "What planes are flying over London?" → Use lat=51.5074, lon=-0.1278, radius_km=40
 
 **Filtered Searches (only when user explicitly requests):**
-- "Show only US-registered aircraft" → Add origin_country='US'
-- "Filter by German planes only" → Add origin_country='DE'
-- "I want to see only French aircraft" → Add origin_country='FR'
+- "Show only US-registered aircraft" → Add filter_only_country='US'
+- "Filter by German planes only" → Add filter_only_country='DE'
+- "I want to see only French aircraft" → Add filter_only_country='FR'
 
 ## Cost Optimization
 

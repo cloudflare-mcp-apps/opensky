@@ -140,7 +140,7 @@ export type DataEvent =
       event: 'aircraft_filtered';
       total_count: number;
       filtered_count: number;
-      filter_type: 'origin_country';
+      filter_type: 'country';
       filter_value: string;
     }
   | {

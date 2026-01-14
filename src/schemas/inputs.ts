@@ -40,9 +40,9 @@ export const FindAircraftNearLocationInput = {
         .max(1000)
         .meta({ description: "Search radius in kilometers (1-1000, e.g., 25 for 25km radius)" }),
 
-    origin_country: z.string()
+    filter_only_country: z.string()
         .length(2)
         .regex(/^[A-Z]{2}$/)
         .optional()
-        .meta({ description: "Optional filter: ISO 3166-1 alpha-2 country code (e.g., 'US', 'DE', 'FR'). ONLY use when user EXPLICITLY requests filtering by country. Do NOT infer country from city/location names." }),
+        .meta({ description: "Explicit country filter. ISO 3166-1 alpha-2 code (e.g., 'US', 'DE'). ONLY use when user says 'filter by country', 'only X aircraft', or 'show only X planes'." }),
 };
