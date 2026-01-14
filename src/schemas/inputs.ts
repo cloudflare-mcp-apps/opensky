@@ -44,5 +44,5 @@ export const FindAircraftNearLocationInput = {
         .length(2)
         .regex(/^[A-Z]{2}$/)
         .optional()
-        .meta({ description: "Optional filter: ISO 3166-1 alpha-2 country code (e.g., 'US', 'DE', 'FR'). Filters results by aircraft origin country." }),
+        .meta({ description: "Optional filter: ISO 3166-1 alpha-2 country code (e.g., 'US', 'DE', 'FR'). ONLY use when user EXPLICITLY requests filtering by country. Do NOT infer country from city/location names." }),
 };

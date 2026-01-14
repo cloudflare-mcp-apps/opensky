@@ -67,9 +67,9 @@ Find all aircraft currently flying within a specified radius of a geographic loc
 4. Total cost: 3 tokens (discovery) + 1 token per follow-up
 
 ### Country Filtering
-- Add \`origin_country\` parameter to \`findAircraftNearLocation\`
-- Reduces results to aircraft registered in specific countries
-- Useful for: "Show me US flights over New York" or "Find German aircraft near Frankfurt"
+- Add \`origin_country\` parameter ONLY when user explicitly requests filtering by country
+- Do NOT infer country from city/location names (e.g., "Paris" does NOT mean filter by FR)
+- If user says "all countries", "any country", or "without filtering" → omit origin_country
 
 ### Radius Selection Guidelines
 - **Small area (5-15km):** Specific airport or small town
@@ -138,10 +138,10 @@ Geographic searches automatically include interactive Leaflet maps showing:
 - "Find aircraft near JFK Airport" → Use lat=40.6413, lon=-73.7781, radius_km=25
 - "What planes are flying over London?" → Use lat=51.5074, lon=-0.1278, radius_km=40
 
-**Filtered Searches:**
-- "Find US flights over New York" → Add origin_country='US'
-- "Show German aircraft near Frankfurt" → Add origin_country='DE'
-- "List French planes over Paris" → Add origin_country='FR'
+**Filtered Searches (only when user explicitly requests):**
+- "Show only US-registered aircraft" → Add origin_country='US'
+- "Filter by German planes only" → Add origin_country='DE'
+- "I want to see only French aircraft" → Add origin_country='FR'
 
 ## Cost Optimization
 
