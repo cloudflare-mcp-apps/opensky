@@ -18,6 +18,7 @@
 import { StrictMode, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { useApp } from "@modelcontextprotocol/ext-apps/react";
+import type { McpUiHostContext } from "@modelcontextprotocol/ext-apps";
 import { LeafletMap } from "../components/LeafletMap";
 import { InfoPanel } from "../components/InfoPanel";
 import { ControlPanel } from "../components/ControlPanel";
@@ -25,22 +26,33 @@ import { Legend } from "../components/Legend";
 import type { Aircraft, FlightData, FilterState } from "../lib/types";
 import "../styles/globals.css";
 
+/** Safe area insets from host context */
+interface SafeAreaInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
 /**
  * Debounce hook for performance optimization
  * Delays function execution until after specified delay with no new calls
  */
-function useDebounce<T extends (...args: unknown[]) => unknown>(
+function useDebounce<T extends (...args: Parameters<T>) => ReturnType<T>>(
   fn: T,
   delay: number
 ): T {
   const timeoutRef = useRef<NodeJS.Timeout>();
 
-  return ((...args: unknown[]) => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    timeoutRef.current = setTimeout(() => fn(...args), delay);
-  }) as T;
+  return useCallback(
+    ((...args: Parameters<T>) => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(() => fn(...args), delay);
+    }) as T,
+    [fn, delay]
+  );
 }
 
 /**
@@ -62,6 +74,34 @@ function FlightMapWidget() {
     minAltitude: 0,
     onlyAirborne: false,
   });
+
+  // Safe area insets from host context (for viewport constraints)
+  const [safeAreaInsets, setSafeAreaInsets] = useState<SafeAreaInsets>({
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  });
+
+  // Handler for host context changes (theme + safe area insets)
+  const handleHostContextChanged = useCallback((context: McpUiHostContext) => {
+    // Theme handling
+    if (context.theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else if (context.theme === "light") {
+      document.documentElement.classList.remove("dark");
+    }
+
+    // Safe area insets handling (MCP Apps best practice)
+    if (context.safeAreaInsets) {
+      setSafeAreaInsets({
+        top: context.safeAreaInsets.top ?? 0,
+        right: context.safeAreaInsets.right ?? 0,
+        bottom: context.safeAreaInsets.bottom ?? 0,
+        left: context.safeAreaInsets.left ?? 0,
+      });
+    }
+  }, []);
 
   // MCP App connection
   const { app } = useApp({
@@ -86,22 +126,25 @@ function FlightMapWidget() {
         console.log("[FlightMap] Partial input:", params);
       };
 
-      // Handle theme changes
-      appInstance.onhostcontextchanged = (context) => {
-        if (context.theme === "dark") {
-          document.documentElement.classList.add("dark");
-        } else if (context.theme === "light") {
-          document.documentElement.classList.remove("dark");
-        }
-      };
+      // Handle host context changes (theme + safe area insets)
+      appInstance.onhostcontextchanged = handleHostContextChanged;
 
-      // Handle graceful teardown (v0.1.0+)
-      appInstance.onteardown = async (params) => {
-        console.log("[FlightMap] Teardown requested:", params.reason);
-        // Cleanup handled by React useEffect cleanup functions
+      // Handle graceful teardown
+      appInstance.onteardown = async () => {
+        console.log("[FlightMap] Teardown requested");
+        return {};
       };
     },
   });
+
+  // Get initial host context after app connects (MCP Apps best practice)
+  useEffect(() => {
+    if (!app) return;
+    const ctx = app.getHostContext();
+    if (ctx) {
+      handleHostContextChanged(ctx);
+    }
+  }, [app, handleHostContextChanged]);
 
   // Filter aircraft based on current filters
   const filteredAircraft = useMemo(() => {
@@ -190,7 +233,7 @@ function FlightMapWidget() {
   // Send message to track aircraft
   const handleTrackAircraft = useCallback(
     (aircraft: Aircraft) => {
-      app?.message({
+      app?.sendMessage({
         role: "user",
         content: [
           {
@@ -250,8 +293,19 @@ function FlightMapWidget() {
     );
   }
 
+  // Compute dynamic padding style from safe area insets
+  const containerStyle = {
+    paddingTop: safeAreaInsets.top,
+    paddingRight: safeAreaInsets.right,
+    paddingBottom: safeAreaInsets.bottom,
+    paddingLeft: safeAreaInsets.left,
+  };
+
   return (
-    <div className="h-[600px] flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
+    <div
+      className="h-[600px] flex flex-col bg-white dark:bg-slate-900 overflow-hidden"
+      style={containerStyle}
+    >
       {/* Control Panel / Header */}
       <ControlPanel
         aircraftCount={data.aircraft_count}
