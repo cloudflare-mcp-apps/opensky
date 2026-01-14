@@ -14,7 +14,7 @@ const ALTITUDE_LEVELS = [
 
 export function Legend() {
   return (
-    <div className="absolute bottom-3 left-3 bg-white/95 dark:bg-slate-800/95 rounded-lg p-3 text-xs shadow-lg z-[1000]">
+    <div className="absolute top-3 left-3 bg-white/95 dark:bg-slate-800/95 rounded-lg p-3 text-xs shadow-lg z-[1000]">
       <div className="font-semibold mb-2 text-slate-700 dark:text-slate-200">
         Altitude
       </div>

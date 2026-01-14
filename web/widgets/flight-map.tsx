@@ -26,6 +26,9 @@ import { Legend } from "../components/Legend";
 import type { Aircraft, FlightData, FilterState } from "../lib/types";
 import "../styles/globals.css";
 
+/** Preferred widget height for inline mode (follows map_server.txt pattern) */
+const PREFERRED_WIDGET_HEIGHT = 500;
+
 /** Safe area insets from host context */
 interface SafeAreaInsets {
   top: number;
@@ -137,13 +140,20 @@ function FlightMapWidget() {
     },
   });
 
-  // Get initial host context after app connects (MCP Apps best practice)
+  // Get initial host context and notify host of preferred size (MCP Apps best practice)
+  // Pattern from map_server.txt: explicitly tell host our preferred height
   useEffect(() => {
     if (!app) return;
+
+    // Get initial host context
     const ctx = app.getHostContext();
     if (ctx) {
       handleHostContextChanged(ctx);
     }
+
+    // Tell host our preferred size for inline mode (critical for avoiding cutoff)
+    app.sendSizeChanged({ height: PREFERRED_WIDGET_HEIGHT });
+    console.log("[FlightMap] Sent preferred size:", PREFERRED_WIDGET_HEIGHT);
   }, [app, handleHostContextChanged]);
 
   // Filter aircraft based on current filters
@@ -257,7 +267,7 @@ function FlightMapWidget() {
   // Loading state (initial)
   if (loading && !data) {
     return (
-      <div className="flex items-center justify-center h-[600px] bg-slate-100 dark:bg-slate-900">
+      <div className="flex items-center justify-center h-[500px] bg-slate-100 dark:bg-slate-900">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-300 border-t-blue-500 mx-auto mb-4" />
           <p className="text-slate-600 dark:text-slate-400">
@@ -271,7 +281,7 @@ function FlightMapWidget() {
   // Error state
   if (error && !data) {
     return (
-      <div className="flex items-center justify-center h-[600px] bg-red-50 dark:bg-red-900/20">
+      <div className="flex items-center justify-center h-[500px] bg-red-50 dark:bg-red-900/20">
         <div className="text-center p-6">
           <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
           <button
@@ -287,7 +297,7 @@ function FlightMapWidget() {
 
   if (!data) {
     return (
-      <div className="flex items-center justify-center h-[600px] bg-slate-100 dark:bg-slate-900">
+      <div className="flex items-center justify-center h-[500px] bg-slate-100 dark:bg-slate-900">
         <p className="text-slate-600 dark:text-slate-400">No data available</p>
       </div>
     );
@@ -303,7 +313,7 @@ function FlightMapWidget() {
 
   return (
     <div
-      className="h-[600px] flex flex-col bg-white dark:bg-slate-900 overflow-hidden"
+      className="h-[500px] flex flex-col bg-white dark:bg-slate-900 overflow-hidden"
       style={containerStyle}
     >
       {/* Control Panel / Header */}
