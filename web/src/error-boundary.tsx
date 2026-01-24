@@ -33,7 +33,7 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex items-center justify-center h-screen bg-red-50 dark:bg-red-900/20">
+        <main role="alert" aria-live="assertive" className="flex items-center justify-center h-[600px] bg-red-50 dark:bg-red-900/20">
           <div className="text-center p-8 max-w-md">
             <h1 className="text-2xl font-bold text-red-600 dark:text-red-400 mb-4">
               Widget Error
@@ -47,11 +47,12 @@ export class ErrorBoundary extends Component<Props, State> {
             <button
               onClick={() => window.location.reload()}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+              aria-label="Reload widget to recover from error"
             >
               Reload Widget
             </button>
           </div>
-        </div>
+        </main>
       );
     }
 

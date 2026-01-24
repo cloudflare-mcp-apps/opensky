@@ -28,7 +28,7 @@ interface InfoRowProps {
 function InfoRow({ label, value }: InfoRowProps) {
   return (
     <div className="flex justify-between py-1.5 border-b border-slate-200 dark:border-slate-700 last:border-0">
-      <span className="text-slate-500 dark:text-slate-400 text-xs">
+      <span className="text-slate-600 dark:text-slate-400 text-xs">
         {label}
       </span>
       <span className="text-slate-800 dark:text-slate-200 text-xs font-medium">
@@ -44,8 +44,15 @@ export function InfoPanel({
   onTrack,
   onOpenExternal,
 }: InfoPanelProps) {
+  const handleCloseKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClose();
+    }
+  };
+
   return (
-    <div className="absolute top-3 right-3 bottom-3 bg-white dark:bg-slate-800 rounded-lg shadow-xl p-4 min-w-[280px] max-w-[320px] z-[1000] flex flex-col max-h-[calc(100%-24px)]">
+    <aside role="complementary" aria-label="Aircraft details" className="absolute top-3 right-3 bottom-3 bg-white dark:bg-slate-800/95 rounded-lg shadow-xl p-4 min-w-[280px] max-w-[320px] z-[1000] flex flex-col max-h-[calc(100%-24px)]">
       {/* Header - fixed height, never shrinks */}
       <div className="flex justify-between items-center mb-3 pb-2 border-b-2 border-blue-500 flex-shrink-0">
         <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-sm">
@@ -53,8 +60,10 @@ export function InfoPanel({
         </h3>
         <button
           onClick={onClose}
+          onKeyDown={handleCloseKeyDown}
           className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl leading-none p-1 -mr-1"
-          aria-label="Close panel"
+          aria-label="Close aircraft details panel"
+          tabIndex={0}
         >
           &times;
         </button>
@@ -103,16 +112,18 @@ export function InfoPanel({
         <button
           onClick={() => onTrack(aircraft)}
           className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-xs font-medium transition-colors"
+          aria-label="Send track request to AI assistant"
         >
           Track Aircraft
         </button>
         <button
           onClick={() => onOpenExternal(aircraft.icao24)}
           className="flex-1 px-3 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700 text-xs font-medium transition-colors"
+          aria-label="Open aircraft details on FlightAware (external link)"
         >
           FlightAware ↗
         </button>
       </div>
-    </div>
+    </aside>
   );
 }

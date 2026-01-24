@@ -17,7 +17,7 @@
 
 import { StrictMode, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { useApp } from "@modelcontextprotocol/ext-apps/react";
+import { App, PostMessageTransport } from "@modelcontextprotocol/ext-apps";
 import type { McpUiHostContext } from "@modelcontextprotocol/ext-apps";
 import { LeafletMap } from "../components/LeafletMap";
 import { InfoPanel } from "../components/InfoPanel";
@@ -26,8 +26,11 @@ import { Legend } from "../components/Legend";
 import type { Aircraft, FlightData, FilterState } from "../lib/types";
 import "../styles/globals.css";
 
-/** Preferred widget height for inline mode (follows map_server.txt pattern) */
-const PREFERRED_WIDGET_HEIGHT = 500;
+/**
+ * Preferred height for inline mode (follows map_server.txt pattern)
+ * Maps fill their container (height: 100%), so we manually tell host our preferred size
+ */
+const PREFERRED_INLINE_HEIGHT = 400;
 
 /** Safe area insets from host context */
 interface SafeAreaInsets {
@@ -106,55 +109,55 @@ function FlightMapWidget() {
     }
   }, []);
 
-  // MCP App connection
-  const { app } = useApp({
-    appInfo: {
-      name: "opensky-flight-map",
-      version: "2.1.0",
-    },
-    capabilities: {},
-    onAppCreated: (appInstance) => {
-      // Handle tool result (main data delivery)
-      appInstance.ontoolresult = (params) => {
-        const payload = params.structuredContent as FlightData | undefined;
-        if (payload?.aircraft) {
-          setData(payload);
-          setLoading(false);
-          setError(null);
-        }
-      };
+  // MCP App instance (manual creation for autoResize: false - map_server pattern)
+  const [app, setApp] = useState<App | null>(null);
 
-      // Handle streaming partial input (optional)
-      appInstance.ontoolinputpartial = (params) => {
-        console.log("[FlightMap] Partial input:", params);
-      };
-
-      // Handle host context changes (theme + safe area insets)
-      appInstance.onhostcontextchanged = handleHostContextChanged;
-
-      // Handle graceful teardown
-      appInstance.onteardown = async () => {
-        console.log("[FlightMap] Teardown requested");
-        return {};
-      };
-    },
-  });
-
-  // Get initial host context and notify host of preferred size (MCP Apps best practice)
-  // Pattern from map_server.txt: explicitly tell host our preferred height
+  // Initialize App with autoResize: false (required for map widgets)
   useEffect(() => {
-    if (!app) return;
+    const transport = new PostMessageTransport();
+    const appInstance = new App(
+      { name: "opensky-flight-map", version: "2.1.0" },
+      {}, // capabilities
+      { autoResize: false } // CRITICAL: Manual size control for maps
+    );
 
-    // Get initial host context
-    const ctx = app.getHostContext();
-    if (ctx) {
-      handleHostContextChanged(ctx);
-    }
+    // Handle tool result (main data delivery)
+    appInstance.ontoolresult = (params) => {
+      const payload = params.structuredContent as FlightData | undefined;
+      if (payload?.aircraft) {
+        setData(payload);
+        setLoading(false);
+        setError(null);
+      }
+    };
 
-    // Tell host our preferred size for inline mode (critical for avoiding cutoff)
-    app.sendSizeChanged({ height: PREFERRED_WIDGET_HEIGHT });
-    console.log("[FlightMap] Sent preferred size:", PREFERRED_WIDGET_HEIGHT);
-  }, [app, handleHostContextChanged]);
+    // Handle streaming partial input (optional)
+    appInstance.ontoolinputpartial = (params) => {
+      console.log("[FlightMap] Partial input:", params);
+    };
+
+    // Handle host context changes (theme + safe area insets)
+    appInstance.onhostcontextchanged = handleHostContextChanged;
+
+    // Handle graceful teardown
+    appInstance.onteardown = async () => {
+      console.log("[FlightMap] Teardown requested");
+      return {};
+    };
+
+    // Connect and notify host of preferred size
+    appInstance.connect(transport).then(() => {
+      setApp(appInstance);
+      // Tell host our preferred height (map_server pattern)
+      appInstance.sendSizeChanged({ height: PREFERRED_INLINE_HEIGHT });
+
+      // Get initial host context
+      const ctx = appInstance.getHostContext();
+      if (ctx) {
+        handleHostContextChanged(ctx);
+      }
+    });
+  }, [handleHostContextChanged]);
 
   // Filter aircraft based on current filters
   const filteredAircraft = useMemo(() => {
@@ -267,7 +270,7 @@ function FlightMapWidget() {
   // Loading state (initial)
   if (loading && !data) {
     return (
-      <div className="flex items-center justify-center h-[500px] bg-slate-100 dark:bg-slate-900">
+      <div className="flex items-center justify-center h-full bg-slate-100 dark:bg-slate-900">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-300 border-t-blue-500 mx-auto mb-4" />
           <p className="text-slate-600 dark:text-slate-400">
@@ -281,7 +284,7 @@ function FlightMapWidget() {
   // Error state
   if (error && !data) {
     return (
-      <div className="flex items-center justify-center h-[500px] bg-red-50 dark:bg-red-900/20">
+      <div className="flex items-center justify-center h-full bg-red-50 dark:bg-red-900/20">
         <div className="text-center p-6">
           <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
           <button
@@ -297,7 +300,7 @@ function FlightMapWidget() {
 
   if (!data) {
     return (
-      <div className="flex items-center justify-center h-[500px] bg-slate-100 dark:bg-slate-900">
+      <div className="flex items-center justify-center h-full bg-slate-100 dark:bg-slate-900">
         <p className="text-slate-600 dark:text-slate-400">No data available</p>
       </div>
     );
@@ -313,7 +316,7 @@ function FlightMapWidget() {
 
   return (
     <div
-      className="h-[500px] flex flex-col bg-white dark:bg-slate-900 overflow-hidden"
+      className="h-full flex flex-col bg-white dark:bg-slate-900 overflow-hidden"
       style={containerStyle}
     >
       {/* Control Panel / Header */}

@@ -1,12 +1,6 @@
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
-import {
-    RESOURCE_MIME_TYPE,
-    // NOTE: RESOURCE_URI_META_KEY is deprecated in v0.4.0 - use nested _meta.ui.resourceUri
-    registerAppResource,
-    registerAppTool,
-} from "@modelcontextprotocol/ext-apps/server";
 import { OpenSkyClient } from "./api-client";
 import type { Env, State } from "./types";
 import { loadHtml } from "./helpers/assets";
@@ -24,6 +18,9 @@ import { SERVER_INSTRUCTIONS } from './server-instructions.js';
 import {
     UI_RESOURCES,
 } from './resources/ui-resources.js';
+
+// SEP-1865: MIME type for MCP App widgets
+const UI_MIME_TYPE = "text/html;profile=mcp-app";
 
 /**
  * OpenSky Flight Tracker MCP Server
@@ -93,16 +90,14 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
         // ========================================================================
         // PART 1: Register Resource (Predeclared UI Template)
         // ========================================================================
-        // Pattern: server-registration-patterns.md#pattern-3
-        // Parameter order: (server, uri, name, options, handler)
-        // For predeclared resources, both name and uri parameters use the same URI
-        registerAppResource(
-            this.server,
-            flightMapResource.uri,           // uri (name parameter): "ui://opensky/mcp-app.html"
-            flightMapResource.uri,           // uri (uri parameter): "ui://opensky/mcp-app.html"
+        // CRITICAL: Use native this.server.registerResource() - NOT registerAppResource()
+        // The ext-apps/server helper functions don't work with OAuthProvider setup
+        this.server.registerResource(
+            flightMapResource.name,
+            flightMapResource.uri,
             {
                 description: flightMapResource.description,
-                mimeType: RESOURCE_MIME_TYPE,  // "text/html;profile=mcp-app" from SDK
+                mimeType: UI_MIME_TYPE,
                 _meta: { ui: flightMapResource._meta.ui! }
             },
             async () => {
@@ -114,7 +109,7 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                 return {
                     contents: [{
                         uri: flightMapResource.uri,
-                        mimeType: RESOURCE_MIME_TYPE,  // Required MIME type for SEP-1865
+                        mimeType: UI_MIME_TYPE,
                         text: templateHTML,
                         _meta: flightMapResource._meta as Record<string, unknown>
                     }]
@@ -131,9 +126,10 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
         // ========================================================================
         // Tool 1: Get Aircraft by ICAO24 (FREE)
         // ========================================================================
+        // CRITICAL: Use native this.server.registerTool() - NOT registerAppTool()
+        // The ext-apps/server helper functions don't work with OAuthProvider setup
         // Direct lookup by ICAO 24-bit transponder address
-        registerAppTool(
-            this.server,
+        this.server.registerTool(
             "get-aircraft-by-icao",
             {
                 title: TOOL_METADATA["get-aircraft-by-icao"].title,
@@ -175,13 +171,15 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
         // ========================================================================
         // PART 2: Register Tool with UI Linkage (FREE)
         // ========================================================================
+        // CRITICAL: Use native this.server.registerTool() - NOT registerAppTool()
+        // The ext-apps/server helper functions don't work with OAuthProvider setup
+        //
         // Pattern: server-registration-patterns.md#pattern-1 (Two-Part Registration)
         // Geographic search using bounding box calculation
         //
-        // CRITICAL: _meta[RESOURCE_URI_META_KEY] links this tool to PART 1 resource
+        // _meta.ui.resourceUri links this tool to PART 1 resource (v0.4.0+ nested structure)
         // This linkage tells the host which UI to render when tool returns results
-        registerAppTool(
-            this.server,
+        this.server.registerTool(
             "find-aircraft-near-location",
             {
                 title: TOOL_METADATA["find-aircraft-near-location"].title,

@@ -14,7 +14,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import type { App } from "@modelcontextprotocol/ext-apps";
+import type { App, McpUiHostContext } from "@modelcontextprotocol/ext-apps";
 import { LeafletMap } from "../components/LeafletMap";
 import { InfoPanel } from "../components/InfoPanel";
 import { ControlPanel } from "../components/ControlPanel";
@@ -29,6 +29,20 @@ interface FlightMapWidgetProps {
   setData: (data: FlightData | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  hostContext?: McpUiHostContext;
+}
+
+/**
+ * Get safe area padding style for mobile compatibility
+ */
+function getSafeAreaPaddingStyle(hostContext?: McpUiHostContext): React.CSSProperties {
+  if (!hostContext?.safeAreaInsets) return {};
+  return {
+    paddingTop: hostContext.safeAreaInsets.top,
+    paddingRight: hostContext.safeAreaInsets.right,
+    paddingBottom: hostContext.safeAreaInsets.bottom,
+    paddingLeft: hostContext.safeAreaInsets.left,
+  };
 }
 
 /**
@@ -60,6 +74,7 @@ export function FlightMapWidget({
   setData,
   setLoading,
   setError,
+  hostContext,
 }: FlightMapWidgetProps) {
   // UI state
   const [selectedAircraft, setSelectedAircraft] = useState<Aircraft | null>(
@@ -105,6 +120,38 @@ export function FlightMapWidget({
       return true;
     });
   }, [data?.aircraft, filter]);
+
+  // Update model context when filters or aircraft count changes (v0.4.1)
+  useEffect(() => {
+    if (!app || !data) return;
+
+    // Use YAML frontmatter for structured context
+    app.updateModelContext({
+      content: [
+        {
+          type: "text",
+          text: `---
+visible-aircraft: ${filteredAircraft.length}
+total-aircraft: ${data.aircraft_count}
+filters:
+  country: ${filter.country || "all"}
+  min-altitude: ${filter.minAltitude}m
+  airborne-only: ${filter.onlyAirborne}
+---
+
+Showing ${filteredAircraft.length} of ${data.aircraft_count} aircraft.${
+            filter.country ? ` Filtered by country: ${filter.country}.` : ""
+          }${
+            filter.minAltitude > 0
+              ? ` Minimum altitude: ${filter.minAltitude}m.`
+              : ""
+          }${filter.onlyAirborne ? " Airborne only." : ""}`,
+        },
+      ],
+    }).catch((err) => {
+      console.warn("[McpApp] Failed to update model context:", err);
+    });
+  }, [app, data, filteredAircraft.length, filter]);
 
   // Refresh data by calling server tool
   const handleRefresh = useCallback(async () => {
@@ -220,7 +267,7 @@ export function FlightMapWidget({
   }
 
   return (
-    <div className="h-[600px] flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
+    <main className="h-[600px] flex flex-col bg-white dark:bg-slate-900 overflow-hidden" style={getSafeAreaPaddingStyle(hostContext)}>
       {/* Control Panel / Header */}
       <ControlPanel
         aircraftCount={data.aircraft_count}
@@ -245,6 +292,20 @@ export function FlightMapWidget({
           selectedAircraft={selectedAircraft}
         />
 
+        {/* Empty state when no aircraft match filters */}
+        {filteredAircraft.length === 0 && data.aircraft_count > 0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[999]">
+            <div className="bg-white/95 dark:bg-slate-800/95 rounded-lg px-6 py-4 shadow-lg text-center">
+              <p className="text-slate-600 dark:text-slate-300 text-sm">
+                No aircraft match current filters
+              </p>
+              <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
+                Try adjusting your filter settings
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Legend */}
         <Legend />
 
@@ -266,13 +327,13 @@ export function FlightMapWidget({
 
         {/* Loading overlay */}
         {loading && data && (
-          <div className="absolute inset-0 bg-black/20 flex items-center justify-center z-[1001]">
+          <div className="absolute inset-0 bg-black/20 flex items-center justify-center z-[1001]" role="status" aria-live="polite" aria-label="Refreshing flight data">
             <div className="bg-white dark:bg-slate-800 rounded-lg px-4 py-3 shadow-lg">
-              <div className="animate-spin rounded-full h-6 w-6 border-2 border-slate-300 border-t-blue-500 mx-auto" />
+              <div className="animate-spin rounded-full h-6 w-6 border-2 border-slate-300 border-t-blue-500 mx-auto" aria-hidden="true" />
             </div>
           </div>
         )}
       </div>
-    </div>
+    </main>
   );
 }

@@ -88,12 +88,16 @@ export function LeafletMap({
       maxZoom: 19,
     }).addTo(map);
 
+    // Get CSS variable colors
+    const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || "#3388ff";
+    const centerMarkerColor = "#ff7800"; // Orange for center marker
+
     // Add search radius circle
     if (radiusKm) {
       radiusCircleRef.current = L.circle([center.latitude, center.longitude], {
         radius: radiusKm * 1000,
-        color: "#3388ff",
-        fillColor: "#3388ff",
+        color: primaryColor,
+        fillColor: primaryColor,
         fillOpacity: 0.1,
         weight: 2,
         dashArray: "8, 4",
@@ -105,8 +109,8 @@ export function LeafletMap({
       [center.latitude, center.longitude],
       {
         radius: 8,
-        color: "#ff7800",
-        fillColor: "#ff7800",
+        color: centerMarkerColor,
+        fillColor: centerMarkerColor,
         fillOpacity: 1,
         weight: 2,
       }
@@ -204,15 +208,34 @@ export function LeafletMap({
       // Click handler
       marker.on("click", () => onAircraftClick(ac));
 
+      // Add keyboard navigation support
+      marker.on("add", () => {
+        const element = marker.getElement();
+        if (element) {
+          element.setAttribute("tabindex", "0");
+          element.setAttribute("role", "button");
+          element.setAttribute("aria-label", `Aircraft ${ac.callsign || "Unknown"} from ${ac.origin_country}`);
+
+          element.addEventListener("keydown", (e: KeyboardEvent) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onAircraftClick(ac);
+            }
+          });
+        }
+      });
+
       markersRef.current?.addLayer(marker);
     });
 
     // If there's a selected aircraft, highlight it
     if (selectedAircraft && selectedAircraft.position.latitude && selectedAircraft.position.longitude) {
+      // Check for reduced motion preference
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       mapRef.current.setView(
         [selectedAircraft.position.latitude, selectedAircraft.position.longitude],
         mapRef.current.getZoom(),
-        { animate: true }
+        { animate: !prefersReducedMotion }
       );
     }
   }, [aircraft, onAircraftClick, selectedAircraft]);
@@ -223,6 +246,11 @@ export function LeafletMap({
         .aircraft-marker {
           background: transparent !important;
           border: none !important;
+          transition: opacity 200ms ease-in-out;
+        }
+        .aircraft-marker:hover,
+        .aircraft-marker:focus-visible {
+          opacity: 0.8;
         }
         .marker-cluster {
           background: transparent !important;

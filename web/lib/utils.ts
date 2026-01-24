@@ -9,12 +9,25 @@ export function cn(...inputs: ClassValue[]) {
  * Get altitude-based color for aircraft marker
  */
 export function getAltitudeColor(altitude: number | null): string {
-  if (altitude === null || altitude === undefined) return "#3388ff";
-  if (altitude <= 300) return "#d4353d"; // Ground/Low (red)
-  if (altitude <= 3000) return "#f58220"; // Low (orange)
-  if (altitude <= 6000) return "#fac858"; // Medium (yellow)
-  if (altitude <= 9000) return "#5eaed8"; // High (light blue)
-  return "#1f77b4"; // Cruise (blue)
+  if (altitude === null || altitude === undefined) {
+    return getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || "#3388ff";
+  }
+
+  const style = getComputedStyle(document.documentElement);
+
+  if (altitude <= 300) {
+    return style.getPropertyValue('--altitude-ground').trim() || "#d4353d";
+  }
+  if (altitude <= 3000) {
+    return style.getPropertyValue('--altitude-low').trim() || "#f58220";
+  }
+  if (altitude <= 6000) {
+    return style.getPropertyValue('--altitude-medium').trim() || "#fac858";
+  }
+  if (altitude <= 9000) {
+    return style.getPropertyValue('--altitude-high').trim() || "#5eaed8";
+  }
+  return style.getPropertyValue('--altitude-cruise').trim() || "#1f77b4";
 }
 
 /**

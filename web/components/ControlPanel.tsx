@@ -45,7 +45,7 @@ export function ControlPanel({
   }, [aircraft]);
 
   return (
-    <header className="flex flex-wrap justify-between items-center gap-3 px-4 py-3 bg-slate-800 text-white">
+    <header role="banner" className="flex flex-wrap justify-between items-center gap-3 px-4 py-3 bg-slate-800 text-white">
       {/* Title and Stats */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
@@ -60,14 +60,14 @@ export function ControlPanel({
             <span className="text-xl font-bold text-blue-400">
               {visibleCount}
             </span>
-            <span className="text-xs text-slate-400 ml-1">
+            <span className="text-xs text-slate-300 ml-1">
               / {aircraftCount}
             </span>
-            <span className="text-xs block text-slate-400">Aircraft</span>
+            <span className="text-xs block text-slate-300">Aircraft</span>
           </div>
           <div className="text-center">
             <span className="text-xl font-bold text-blue-400">{radiusKm}</span>
-            <span className="text-xs block text-slate-400">km radius</span>
+            <span className="text-xs block text-slate-300">km radius</span>
           </div>
         </div>
       </div>
@@ -81,6 +81,7 @@ export function ControlPanel({
             onFilterChange({ ...filter, country: e.target.value || null })
           }
           className="px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          aria-label="Filter by country"
         >
           <option value="">All Countries</option>
           {countries.map((country) => (
@@ -92,7 +93,7 @@ export function ControlPanel({
 
         {/* Altitude Filter */}
         <div className="flex items-center gap-2">
-          <label className="text-xs text-slate-400">Min Alt:</label>
+          <label className="text-xs text-slate-300">Min Alt:</label>
           <input
             type="range"
             min={0}
@@ -103,6 +104,7 @@ export function ControlPanel({
               onFilterChange({ ...filter, minAltitude: Number(e.target.value) })
             }
             className="w-20 accent-blue-500"
+            aria-label="Minimum altitude filter"
           />
           <span className="text-xs text-slate-300 w-12">
             {filter.minAltitude > 0 ? `${filter.minAltitude}m` : "All"}
@@ -118,6 +120,7 @@ export function ControlPanel({
               onFilterChange({ ...filter, onlyAirborne: e.target.checked })
             }
             className="w-4 h-4 accent-blue-500 rounded"
+            aria-label="Show only airborne aircraft"
           />
           <span className="text-slate-300">Airborne only</span>
         </label>
@@ -133,6 +136,8 @@ export function ControlPanel({
               ? "bg-green-600 hover:bg-green-700"
               : "bg-slate-600 hover:bg-slate-500"
           }`}
+          aria-label="Toggle automatic refresh every 30 seconds"
+          aria-pressed={autoRefresh}
         >
           {autoRefresh ? "Auto ●" : "Auto ○"}
         </button>
@@ -142,6 +147,8 @@ export function ControlPanel({
           onClick={onRefresh}
           disabled={isLoading}
           className="px-3 py-1.5 bg-blue-600 rounded text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          aria-label="Manually refresh flight data"
+          aria-busy={isLoading}
         >
           {isLoading ? "..." : "Refresh"}
         </button>
