@@ -145,17 +145,44 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                     // Execute tool logic
                     const aircraft = await openskyClient.getAircraftByIcao(String(icao24));
 
-                    const result = aircraft
-                        ? JSON.stringify(aircraft, null, 2)
-                        : `No aircraft found with ICAO24: ${icao24} (aircraft may not be currently flying)`;
+                    if (aircraft) {
+                        const nextSteps: string[] = [];
 
-                    return {
-                        content: [{
-                            type: "text" as const,
-                            text: result
-                        }],
-                        structuredContent: aircraft as any
-                    };
+                        // If we have position data, suggest nearby search
+                        if (aircraft.position.latitude !== null && aircraft.position.longitude !== null) {
+                            nextSteps.push(`Search for nearby aircraft using find-aircraft-near-location with lat=${aircraft.position.latitude}, lon=${aircraft.position.longitude}`);
+                        }
+
+                        nextSteps.push("Call this tool again in a few minutes to track position changes");
+                        nextSteps.push("Use the aircraft's origin_country to find other aircraft from the same country");
+
+                        return {
+                            content: [{
+                                type: "text" as const,
+                                text: JSON.stringify(aircraft, null, 2)
+                            }],
+                            structuredContent: {
+                                ...aircraft,
+                                next_steps: nextSteps
+                            }
+                        };
+                    } else {
+                        return {
+                            content: [{
+                                type: "text" as const,
+                                text: `No aircraft found with ICAO24: ${icao24} (aircraft may not be currently flying)`
+                            }],
+                            structuredContent: {
+                                icao24,
+                                found: false,
+                                next_steps: [
+                                    "Verify the ICAO24 code is correct (6 hexadecimal characters)",
+                                    "The aircraft may not be currently airborne - try again later",
+                                    "Use find-aircraft-near-location to search by geographic area instead"
+                                ]
+                            }
+                        };
+                    }
                 } catch (error) {
                     return {
                         content: [{
@@ -204,29 +231,60 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                         Number(radius_km)
                     );
 
-                    const result = aircraftList.length > 0
-                        ? JSON.stringify({
+                    if (aircraftList.length > 0) {
+                        // Build contextual next steps based on results
+                        const nextSteps: string[] = [];
+
+                        // Suggest getting details on first aircraft
+                        if (aircraftList[0]?.icao24) {
+                            nextSteps.push(`Get detailed info on aircraft ${aircraftList[0].icao24} using get-aircraft-by-icao`);
+                        }
+
+                        // Suggest filtering or expanding
+                        if (aircraftList.length > 10) {
+                            nextSteps.push(`Narrow search with smaller radius (try ${Math.floor(radius_km / 2)}km) to reduce results`);
+                        } else if (aircraftList.length < 5 && radius_km < 500) {
+                            nextSteps.push(`Expand search with larger radius (try ${Math.min(radius_km * 2, 1000)}km) to find more aircraft`);
+                        }
+
+                        nextSteps.push("Call this tool again to see updated positions (aircraft move ~10km/min at cruise)");
+
+                        const structuredResult = {
                             search_center: { latitude, longitude },
                             radius_km,
                             aircraft_count: aircraftList.length,
-                            aircraft: aircraftList
-                        }, null, 2)
-                        : `No aircraft currently flying within ${radius_km}km of (${latitude}, ${longitude})`;
+                            aircraft: aircraftList,
+                            next_steps: nextSteps
+                        };
 
-                    const structuredResult = {
-                        search_center: { latitude, longitude },
-                        radius_km,
-                        aircraft_count: aircraftList.length,
-                        aircraft: aircraftList
-                    };
+                        return {
+                            content: [{
+                                type: "text" as const,
+                                text: JSON.stringify(structuredResult, null, 2)
+                            }],
+                            structuredContent: structuredResult
+                        };
+                    } else {
+                        const structuredResult = {
+                            search_center: { latitude, longitude },
+                            radius_km,
+                            aircraft_count: 0,
+                            aircraft: [],
+                            next_steps: [
+                                `Expand search radius (try ${Math.min(radius_km * 2, 1000)}km)`,
+                                "Try a location near a major airport for more traffic",
+                                "Some regions have less air traffic - try searching near major cities"
+                            ]
+                        };
 
-                    return {
-                        content: [{
-                            type: "text" as const,
-                            text: result
-                        }],
-                        structuredContent: structuredResult
-                    };
+                        return {
+                            content: [{
+                                type: "text" as const,
+                                text: `No aircraft currently flying within ${radius_km}km of (${latitude}, ${longitude})`
+                            }],
+                            structuredContent: structuredResult
+                        };
+                    }
                 } catch (error) {
                     return {
                         content: [{
