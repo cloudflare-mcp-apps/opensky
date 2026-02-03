@@ -17,7 +17,13 @@
 
 import { StrictMode, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { App, PostMessageTransport } from "@modelcontextprotocol/ext-apps";
+import {
+  App,
+  PostMessageTransport,
+  applyDocumentTheme,
+  applyHostStyleVariables,
+  applyHostFonts,
+} from "@modelcontextprotocol/ext-apps";
 import type { McpUiHostContext } from "@modelcontextprotocol/ext-apps";
 import { LeafletMap } from "../components/LeafletMap";
 import { InfoPanel } from "../components/InfoPanel";
@@ -91,11 +97,17 @@ function FlightMapWidget() {
 
   // Handler for host context changes (theme + safe area insets)
   const handleHostContextChanged = useCallback((context: McpUiHostContext) => {
-    // Theme handling
-    if (context.theme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else if (context.theme === "light") {
-      document.documentElement.classList.remove("dark");
+    // Theme handling with SDK helpers
+    if (context.theme) {
+      applyDocumentTheme(context.theme);
+      // Also set dark class for Tailwind
+      document.documentElement.classList.toggle("dark", context.theme === "dark");
+    }
+    if (context.styles?.variables) {
+      applyHostStyleVariables(context.styles.variables);
+    }
+    if (context.styles?.css?.fonts) {
+      applyHostFonts(context.styles.css.fonts);
     }
 
     // Safe area insets handling (MCP Apps best practice)
@@ -270,9 +282,17 @@ function FlightMapWidget() {
   // Loading state (initial)
   if (loading && !data) {
     return (
-      <div className="flex items-center justify-center h-full bg-slate-100 dark:bg-slate-900">
+      <div
+        className="flex items-center justify-center h-full bg-slate-100 dark:bg-slate-900"
+        role="status"
+        aria-label="Loading flight data"
+        aria-busy="true"
+      >
         <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-4 border-slate-300 border-t-blue-500 mx-auto mb-4" />
+          <div
+            className="animate-spin rounded-full h-10 w-10 border-4 border-slate-300 border-t-blue-500 mx-auto mb-4"
+            aria-hidden="true"
+          />
           <p className="text-slate-600 dark:text-slate-400">
             Waiting for flight data...
           </p>
@@ -284,12 +304,17 @@ function FlightMapWidget() {
   // Error state
   if (error && !data) {
     return (
-      <div className="flex items-center justify-center h-full bg-red-50 dark:bg-red-900/20">
+      <div
+        className="flex items-center justify-center h-full bg-red-50 dark:bg-red-900/20"
+        role="alert"
+        aria-live="assertive"
+      >
         <div className="text-center p-6">
           <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
           <button
             onClick={handleRefresh}
             className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            aria-label="Retry loading flight data"
           >
             Retry
           </button>
@@ -300,7 +325,11 @@ function FlightMapWidget() {
 
   if (!data) {
     return (
-      <div className="flex items-center justify-center h-full bg-slate-100 dark:bg-slate-900">
+      <div
+        className="flex items-center justify-center h-full bg-slate-100 dark:bg-slate-900"
+        role="status"
+        aria-label="No flight data available"
+      >
         <p className="text-slate-600 dark:text-slate-400">No data available</p>
       </div>
     );
@@ -318,6 +347,8 @@ function FlightMapWidget() {
     <div
       className="h-full flex flex-col bg-white dark:bg-slate-900 overflow-hidden"
       style={containerStyle}
+      role="main"
+      aria-label="Flight Tracker Map"
     >
       {/* Control Panel / Header */}
       <ControlPanel

@@ -108,9 +108,57 @@ select:focus-visible {
     animation: none;
   }
 
-  * {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Accessibility: High contrast mode */
+@media (prefers-contrast: more) {
+  :root {
+    --color-border: #333333;
+  }
+
+  .dark {
+    --color-border: #cccccc;
+  }
+
+  button,
+  a,
+  input,
+  select {
+    border-width: 2px;
+  }
+
+  /* Increase cluster icon contrast */
+  .cluster-icon {
+    border-width: 3px;
+  }
+}
+
+/* Accessibility: Global focus styles for all interactive elements */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Remove default outline for mouse users */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Smooth transitions for users without motion sensitivity */
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  a,
+  input,
+  select {
+    transition: background-color 0.15s ease, border-color 0.15s ease,
+      box-shadow 0.15s ease, color 0.15s ease;
   }
 }

@@ -294,7 +294,12 @@ export function LeafletMap({
           color: #60a5fa;
         }
       `}</style>
-      <div ref={mapContainerRef} className="w-full h-full z-0" />
+      <div
+        ref={mapContainerRef}
+        className="w-full h-full z-0"
+        role="application"
+        aria-label="Interactive flight map showing aircraft positions. Use arrow keys to pan, plus/minus to zoom."
+      />
     </>
   );
 }

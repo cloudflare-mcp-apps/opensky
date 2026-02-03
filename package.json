@@ -36,8 +36,15 @@
     "dev": "wrangler dev",
     "dev:full": "concurrently \"npm run dev\" \"npm run watch:widgets\"",
     "dev:widget": "npm run watch",
+    "serve:http": "wrangler dev",
+    "serve:stdio": "cross-env NODE_ENV=development wrangler dev --local",
+    "start": "npm run start:http",
+    "start:http": "npm run build:widgets && npm run serve:http",
+    "start:stdio": "npm run build:widgets && npm run serve:stdio",
     "deploy": "npm run build:widgets && wrangler deploy",
     "type-check": "tsc --noEmit",
+    "pre-commit": "npm run type-check && npm run build:widgets",
+    "verify-all": "npm run pre-commit",
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
