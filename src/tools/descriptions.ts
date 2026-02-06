@@ -63,7 +63,7 @@ export const TOOL_METADATA = {
     description: {
       part1_purpose: "Get real-time aircraft details by ICAO 24-bit transponder address.",
 
-      part2_returns: "Returns current position (latitude, longitude, altitude), velocity (ground speed, vertical rate, heading), callsign, origin country, and last contact timestamp.",
+      part2_returns: "Returns position, velocity, callsign, origin country, and last contact timestamp.",
 
       part3_useCase: "Use this when you need to track a specific aircraft by its unique hex identifier (e.g., '3c6444').",
 
@@ -97,9 +97,9 @@ export const TOOL_METADATA = {
     description: {
       part1_purpose: "Find all aircraft currently flying near a geographic location.",
 
-      part2_returns: "Returns list of aircraft with position (lat/lon/altitude), velocity (speed, vertical rate, heading), callsign, ICAO address, origin country, and last contact timestamp.",
+      part2_returns: "Returns list of aircraft with position, velocity, callsign, ICAO address, and origin country.",
 
-      part3_useCase: "Use this when you want to discover flight activity in a region (e.g., aircraft over a city or near an airport). Optionally filter by origin country (ISO code).",
+      part3_useCase: "Use this to discover flight activity in a region. Optionally filter by origin country (ISO code).",
 
       part4_constraints: "Note: Searches within a radius up to 1000km. Large search areas may return many results. Only includes aircraft broadcasting ADS-B signals."
     },

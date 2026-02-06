@@ -135,6 +135,7 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                 title: TOOL_METADATA["get-aircraft-by-icao"].title,
                 description: getToolDescription("get-aircraft-by-icao"),
                 inputSchema: GetAircraftByIcaoInput,
+                outputSchema: GetAircraftByIcaoOutputSchema,
                 _meta: {},
             },
             async (args: any) => {
@@ -212,6 +213,7 @@ export class OpenSkyMcp extends McpAgent<Env, State> {
                 title: TOOL_METADATA["find-aircraft-near-location"].title,
                 description: getToolDescription("find-aircraft-near-location"),
                 inputSchema: FindAircraftNearLocationInput,
+                outputSchema: FindAircraftNearLocationOutputSchema,
                 // SEP-1865: Link tool to predeclared UI resource (PART 1)
                 // Host will render this resource when tool returns results
                 // Always include - hosts that don't support UI will ignore it
